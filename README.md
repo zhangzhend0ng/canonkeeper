@@ -1,4 +1,4 @@
-# dsharness —— 网文长篇验证 harness
+# canonkeeper —— 网文长篇验证 harness
 
 给长篇网文的生成/改稿流程装上**三级验证体系**。模型无关（OpenAI 兼容 API 可插拔），
 研究"怎么用模型"，不练模型——模型是可插拔的被试，harness 是资产。
@@ -22,7 +22,7 @@ python -m venv .venv
 .venv/Scripts/pytest                        # 75 项单测，全部离线
 ```
 
-命令行入口：`dsharness`（主）、`dsharness-mcp`（MCP server）。`dsh` 仅作遗留别名保留——
+命令行入口：`canonkeeper`（主）、`canonkeeper-mcp`（MCP server）。`dsh` 仅作遗留别名保留——
 deepseek-harness 的 CLI 也叫 `dsh`，同环境安装会撞名。
 
 ## 配置（密钥只走环境变量，绝不写入代码/配置/日志）
@@ -39,12 +39,12 @@ deepseek-harness 的 CLI 也叫 `dsh`，同环境安装会撞名。
 ## 用法
 
 ```bash
-dsharness ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--skip-errors]
-dsharness check   books/demo.db                  # 规则引擎，冲突写回状态库
-dsharness report  books/demo.db                  # markdown 冲突报告 → reports/
-dsharness replay  books/demo.db 3                # 回放第3章抽取 JSON（往返核对）
-dsharness stability book.txt --provider deepseek --runs 2  # M0 验收：抽取往返稳定性
-dsharness rules                                  # 列出内置规则
+canonkeeper ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--skip-errors]
+canonkeeper check   books/demo.db                  # 规则引擎，冲突写回状态库
+canonkeeper report  books/demo.db                  # markdown 冲突报告 → reports/
+canonkeeper replay  books/demo.db 3                # 回放第3章抽取 JSON（往返核对）
+canonkeeper stability book.txt --provider deepseek --runs 2  # M0 验收：抽取往返稳定性
+canonkeeper rules                                  # 列出内置规则
 ```
 
 无 API key 时可用 `--provider mock` 跑通全链路（返回与正文无关的固定样例抽取）。
@@ -73,7 +73,7 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
 "everything is a plugin"）的插件一等公民是 TypeScript/Cordis；Python 工具包的标准接入路径是
 **MCP server**。本仓库内置两端：
 
-- **MCP server**（`dsharness/mcp.py`，`pip install "dsharness[mcp]"` 后由 `dsharness-mcp` 启动），
+- **MCP server**（`canonkeeper/mcp.py`，`pip install "canonkeeper[mcp]"` 后由 `canonkeeper-mcp` 启动），
   工具面对应 PLAN M3 生成回路：
 
   | 工具 | 时机 | 作用 |
@@ -86,7 +86,7 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
 
 - **dsh bundle**（[plugin/](plugin/)）：薄壳，只插一行 `@deepseek-ai/dsh-mcp-client` 配置。
   安装：`dsh plugin --profile <name> add file:<repo>/plugin`，工具即以
-  `mcp__dsharness__*` 出现在模型工具列表。详见 [plugin/README.md](plugin/README.md)。
+  `mcp__canonkeeper__*` 出现在模型工具列表。详见 [plugin/README.md](plugin/README.md)。
 
 ## 当前状态
 

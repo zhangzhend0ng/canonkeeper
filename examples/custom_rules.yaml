@@ -1,6 +1,6 @@
 # 自定义规则示例：非修仙书的等级阶梯（PLAN §4 表驱动，加规则零代码）
 # 用法：dsh check books/demo.db --rules examples/custom_rules.yaml
-# rule_id 不得与内置规则重复；predicate 必须是 dsharness.rules.predicates 中的注册名。
+# rule_id 不得与内置规则重复；predicate 必须是 canonkeeper.rules.predicates 中的注册名。
 - rule_id: CUSTOM_012
   name: 等级单调（自定义阶梯）
   severity: high

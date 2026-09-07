@@ -1,13 +1,13 @@
-"""MCP server：把 dsharness 验证能力暴露给 MCP 宿主（deepseek-harness 等）。
+"""MCP server：把 canonkeeper 验证能力暴露给 MCP 宿主（deepseek-harness 等）。
 
 定位（PLAN M3 生成回路）：agent 写前用 query_entity 查设定，写后用
 check_consistency 跑硬验证器（纯程序化判定），get_report/replay_chapter
 供人工与 agent 复核；ingest_book 负责新章节入库。
 
-- 传输：stdio（dsh 经 @deepseek-ai/dsh-mcp-client 以 `mcp__dsharness__<tool>` 挂载，
+- 传输：stdio（dsh 经 @deepseek-ai/dsh-mcp-client 以 `mcp__canonkeeper__<tool>` 挂载，
   见仓库 plugin/ 目录的 bundle）。
 - 工具返回 JSON 文本（get_report 返回 markdown）。
-- 依赖可选 extra：pip install "dsharness[mcp]"。本模块顶层不 import mcp，
+- 依赖可选 extra：pip install "canonkeeper[mcp]"。本模块顶层不 import mcp，
   未安装时 CLI/库功能不受影响。
 """
 
@@ -176,19 +176,19 @@ def create_server() -> "FastMCP":
     """组装 FastMCP server（需要 mcp extra）。"""
     from mcp.server.fastmcp import FastMCP
 
-    server: FastMCP = FastMCP("dsharness")
+    server: FastMCP = FastMCP("canonkeeper")
     for tool in (ingest_book, check_consistency, query_entity, replay_chapter, get_report):
         server.tool()(tool)
     return server
 
 
 def main() -> int:
-    """console script 入口（dsharness-mcp）：stdio 传输，阻塞运行。"""
+    """console script 入口（canonkeeper-mcp）：stdio 传输，阻塞运行。"""
     try:
         from mcp.server.fastmcp import FastMCP  # noqa: F401
     except ImportError as exc:
         print(
-            f"错误: MCP 支持未安装（{exc}）。请安装: pip install 'dsharness[mcp]'",
+            f"错误: MCP 支持未安装（{exc}）。请安装: pip install 'canonkeeper[mcp]'",
             file=sys.stderr,
         )
         return 1

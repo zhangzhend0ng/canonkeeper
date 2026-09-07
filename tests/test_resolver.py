@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dsharness.store.resolver import EntityResolver
+from canonkeeper.store.resolver import EntityResolver
 from helpers import entity, extraction
 
 

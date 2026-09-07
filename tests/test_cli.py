@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from dsharness.cli import main
+from canonkeeper.cli import main
 
 BOOK_TEXT = (
     "第一章 出发\n林昼拜别青云宗，踏上北去的长路。\n"
@@ -29,7 +29,7 @@ def test_full_pipeline_ingest_check_report_with_mock(tmp_path: Path) -> None:
     report = tmp_path / "report.md"
     assert main(["report", str(db), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
-    assert "# dsharness 冲突报告" in text
+    assert "# canonkeeper 冲突报告" in text
     assert "《book.txt》" in text  # 元信息标注书名与模型版本
 
 
@@ -37,7 +37,7 @@ def test_limit_ingests_only_first_n_chapters(tmp_path: Path) -> None:
     book = _write_book(tmp_path)
     db = tmp_path / "state.db"
     assert main(["ingest", str(book), "--db", str(db), "--provider", "mock", "--limit", "1"]) == 0
-    from dsharness.store.db import StateDB
+    from canonkeeper.store.db import StateDB
 
     with StateDB(db) as state:
         assert len(state.extractions()) == 1

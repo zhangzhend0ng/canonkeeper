@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dsharness.pipeline import ingest_book_to_db, run_check
+from canonkeeper.pipeline import ingest_book_to_db, run_check
 
 BOOK = "第一章 相识\n林昼在青云宗遇见了苏晚。\n第二章 突破\n林昼突破了炼气三层。"
 

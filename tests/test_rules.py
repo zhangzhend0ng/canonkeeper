@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from dsharness.extract.schemas import StoryTime
-from dsharness.rules.engine import Rule, RuleError, load_builtin_rules, load_rules, run_rules
-from dsharness.rules.predicates import PREDICATES
-from dsharness.store.db import ChangeRec, EventRec
+from canonkeeper.extract.schemas import StoryTime
+from canonkeeper.rules.engine import Rule, RuleError, load_builtin_rules, load_rules, run_rules
+from canonkeeper.rules.predicates import PREDICATES
+from canonkeeper.store.db import ChangeRec, EventRec
 from helpers import make_view
 
 DEATH_PARAMS: dict[str, object] = {

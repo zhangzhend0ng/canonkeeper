@@ -33,7 +33,7 @@ def render_report(db: StateDB, rules: Sequence[Rule]) -> str:
 
     lines: list[str] = []
     title = db.get_meta("book_title", "未命名书稿")
-    lines.append(f"# dsharness 冲突报告：《{title}》")
+    lines.append(f"# canonkeeper 冲突报告：《{title}》")
     lines.append("")
     lines.append(f"- 生成时间：{datetime.now().astimezone().isoformat(timespec='seconds')}")
     provider = db.get_meta("provider", "?")

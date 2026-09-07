@@ -1,4 +1,4 @@
-# dsharness —— 网文长篇验证 harness 方案 v1
+# canonkeeper —— 网文长篇验证 harness 方案 v1
 
 > 一句话：给长篇网文的生成/改稿流程装上**三级验证体系**的 harness。
 > 模型无关（DeepSeek/GLM 等 OpenAI 兼容 API 可插拔），研究"怎么用模型"，不练模型。
@@ -16,7 +16,7 @@
 ## 1. 模型策略（API-first）
 
 - **Provider 抽象层**：只写一个 OpenAI-compatible 适配器（base_url + api_key + model 三参数），
-  通吃 DeepSeek / GLM(open.bigmodel.cn) / Kimi / 本地 vLLM——**名字叫 dsharness，
+  通吃 DeepSeek / GLM(open.bigmodel.cn) / Kimi / 本地 vLLM——**名字叫 canonkeeper，
   但 DeepSeek 只是默认适配器，不锁死架构**
 - 首发适配器=DeepSeek：直连无墙、OpenAI 兼容、便宜（长上下文整书分析一次≈几元）、
   中文强；GLM 同格式为第二适配器（对照被试）
@@ -77,10 +77,10 @@ M0~M2 纯 API 无 GPU；M1 产出的检测器本身就是可公开的开源工�
 ## 6. 新仓库目录建议
 
 ```
-dsharness/
+canonkeeper/
   PLAN.md                 ← 本文档
   pyproject.toml          ← python 3.10+；依赖：openai sdk(兼容端点)/pydantic/sqlite3(内置)/typer(可选)
-  dsharness/
+  canonkeeper/
     providers/base.py     # OpenAI 兼容抽象：chat(messages, json_schema, tier)
     providers/deepseek.py # base_url=https://api.deepseek.com 默认
     providers/glm.py      # base_url=https://open.bigmodel.cn/api/paas/v4

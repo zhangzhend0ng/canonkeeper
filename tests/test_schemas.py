@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from dsharness.extract.schemas import ChapterExtraction, EntityMention, Event
+from canonkeeper.extract.schemas import ChapterExtraction, EntityMention, Event
 
 
 def test_minimal_extraction_fills_defaults() -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from dsharness.ingest import load_book_text, split_chapters
+from canonkeeper.ingest import load_book_text, split_chapters
 
 
 def test_splits_by_chapter_headings() -> None:

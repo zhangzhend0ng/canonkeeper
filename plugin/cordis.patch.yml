@@ -1,17 +1,17 @@
-# 把 dsharness 的 MCP server 挂进 dsh（deepseek-ai/deepseek-harness）。
-# 生效后模型工具列表出现 mcp__dsharness__ingest_book / check_consistency /
+# 把 canonkeeper 的 MCP server 挂进 dsh（deepseek-ai/deepseek-harness）。
+# 生效后模型工具列表出现 mcp__canonkeeper__ingest_book / check_consistency /
 # query_entity / replay_chapter / get_report。
 #
 # 前提：已在 dsh 宿主可用的环境装好 Python 包：
-#   pip install "dsharness[mcp]"        （dsharness-mcp 命令进入 PATH）
+#   pip install "canonkeeper[mcp]"        （canonkeeper-mcp 命令进入 PATH）
 # dsh 的 stdio 环境会被净化，密钥不透传，因此这里显式从宿主进程转发：
 - insert:
-    - id: mcp-dsharness
+    - id: mcp-canonkeeper
       name: '@deepseek-ai/dsh-mcp-client'
       config:
-        serverName: dsharness
+        serverName: canonkeeper
         transport: stdio
-        command: dsharness-mcp
+        command: canonkeeper-mcp
         args: []
         env:
           DEEPSEEK_API_KEY: !!js process.env.DEEPSEEK_API_KEY

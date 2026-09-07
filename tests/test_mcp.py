@@ -13,14 +13,14 @@ pytest.importorskip("mcp")
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
 from mcp.client.stdio import stdio_client  # noqa: E402
 
-from dsharness.pipeline import ingest_book_to_db  # noqa: E402
+from canonkeeper.pipeline import ingest_book_to_db  # noqa: E402
 
 BOOK = "第一章 相识\n林昼在青云宗遇见了苏晚。\n第二章 突破\n林昼突破了炼气三层。"
 TOOLS = {"ingest_book", "check_consistency", "query_entity", "replay_chapter", "get_report"}
 
 
 def _server_params() -> StdioServerParameters:
-    return StdioServerParameters(command=sys.executable, args=["-m", "dsharness.mcp"])
+    return StdioServerParameters(command=sys.executable, args=["-m", "canonkeeper.mcp"])
 
 
 def _make_db(tmp_path: Path) -> Path:
@@ -61,7 +61,7 @@ def test_server_lists_all_tools_and_serves(tmp_path: Path) -> None:
                 assert json.loads(replay.content[0].text)["chapter"] == 2
 
                 report = await session.call_tool("get_report", {"db_path": str(db)})
-                assert "dsharness 冲突报告" in report.content[0].text
+                assert "canonkeeper 冲突报告" in report.content[0].text
 
     _run(flow())
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dsharness.extract.schemas import StoryTime
-from dsharness.store.db import StateDB
+from canonkeeper.extract.schemas import StoryTime
+from canonkeeper.store.db import StateDB
 from helpers import change, entity, event, extraction
 
 
@@ -60,7 +60,7 @@ def test_alias_collisions_persisted_to_meta(db_path) -> None:
 
 
 def test_violations_replace_semantics(db_path) -> None:
-    from dsharness.store.db import Violation
+    from canonkeeper.store.db import Violation
 
     with StateDB(db_path) as db:
         db.replace_violations([Violation(rule_id="A", message="一")])

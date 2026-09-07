@@ -1,9 +1,21 @@
 {
-  "name": "dsharness-dsh-plugin",
-  "version": "0.1.0",
-  "description": "dsharness —— 网文长篇验证 harness（设定冲突检测/状态库/规则引擎），经 MCP 接入 dsh（deepseek-ai/deepseek-harness）",
+  "name": "dsh-canonkeeper",
+  "version": "0.2.0",
+  "description": "canonkeeper —— 网文长篇验证 harness（设定冲突检测/状态库/规则引擎），经 MCP 接入 dsh（deepseek-ai/deepseek-harness）",
   "license": "MIT",
   "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "mcp",
+    "web-novel",
+    "consistency",
+    "canon"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

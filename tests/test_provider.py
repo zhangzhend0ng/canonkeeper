@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from dsharness.providers.base import (
+from canonkeeper.providers.base import (
     OpenAICompatProvider,
     ProviderConfig,
     ProviderError,

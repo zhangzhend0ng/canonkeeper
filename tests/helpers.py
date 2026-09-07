@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Mapping, Sequence
 
-from dsharness.extract.schemas import (
+from canonkeeper.extract.schemas import (
     ChapterExtraction,
     EntityMention,
     Event,
@@ -12,9 +12,9 @@ from dsharness.extract.schemas import (
     StateChange,
     StoryTime,
 )
-from dsharness.ingest import Chapter
-from dsharness.store.db import BookView
-from dsharness.store.resolver import ResolvedEntity
+from canonkeeper.ingest import Chapter
+from canonkeeper.store.db import BookView
+from canonkeeper.store.resolver import ResolvedEntity
 
 
 def entity(

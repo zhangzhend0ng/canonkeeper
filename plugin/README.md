@@ -1,13 +1,13 @@
-# dsharness × dsh 插件 bundle
+# canonkeeper × dsh 插件 bundle
 
-把 [dsharness](../README.md)（网文长篇验证 harness）作为插件接入
+把 [canonkeeper](../README.md)（网文长篇验证 harness）作为插件接入
 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（CLI 名 `dsh`）。
 
 ## 架构
 
 ```
 dsh agent 循环 ── ctx.tools ── @deepseek-ai/dsh-mcp-client (stdio)
-                                    └── dsharness-mcp (本仓库 Python MCP server)
+                                    └── canonkeeper-mcp (本仓库 Python MCP server)
                                             ├── ingest_book      写后入库
                                             ├── check_consistency 写后验证（纯程序化规则引擎）
                                             ├── query_entity      写前查设定
@@ -21,14 +21,14 @@ dsh 的插件一等公民是 TypeScript/Cordis；Python 工具包的标准接入
 ## 安装
 
 ```bash
-# 1. 装本包（MCP extra + dsharness-mcp 命令）
-pip install "git+https://example.com/dsharness.git#egg=dsharness[mcp]"
-#   或本地: pip install "C:/build/dsharness[mcp]"
+# 1. 装本包（MCP extra + canonkeeper-mcp 命令）
+pip install "git+https://example.com/canonkeeper.git#egg=canonkeeper[mcp]"
+#   或本地: pip install "C:/build/canonkeeper[mcp]"
 
 # 2. 把 bundle 装进 dsh 的某个 profile
-dsh plugin --profile <你的profile> add file:C:/build/dsharness/plugin
+dsh plugin --profile <你的profile> add file:C:/build/canonkeeper/plugin
 
-# 3. 重启 dsh 后，模型工具列表出现 mcp__dsharness__* 五个工具
+# 3. 重启 dsh 后，模型工具列表出现 mcp__canonkeeper__* 五个工具
 ```
 
 不想发 npm 包的零安装替代：把 `cordis.patch.yml` 里 `- insert:` 段落手工并入

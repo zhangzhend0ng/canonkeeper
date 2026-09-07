@@ -64,7 +64,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         chapter = f"第{violation.chapter}章" if violation.chapter else "全书"
         print(f"  [{violation.severity}] {violation.rule_id} {chapter}: {violation.message}")
     if len(violations) > 20:
-        print(f"  …其余 {len(violations) - 20} 条请用 `dsharness report` 查看")
+        print(f"  …其余 {len(violations) - 20} 条请用 `canonkeeper report` 查看")
     return 0
 
 
@@ -132,7 +132,7 @@ def _cmd_stability(args: argparse.Namespace) -> int:
         rows.append((chapter, variants, mean(scores) if scores else 1.0))
 
     lines: list[str] = []
-    lines.append("# dsharness 抽取往返稳定性报告")
+    lines.append("# canonkeeper 抽取往返稳定性报告")
     lines.append("")
     lines.append(f"- 书稿：{Path(args.book).name} · provider={args.provider} · 每章抽取 {args.runs} 遍")
     lines.append(f"- 生成时间：{datetime.now().astimezone().isoformat(timespec='seconds')}")
@@ -185,10 +185,10 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="dsharness",
-        description="dsharness —— 网文长篇三级验证 harness（见 PLAN.md）",
+        prog="canonkeeper",
+        description="canonkeeper —— 网文长篇三级验证 harness（见 PLAN.md）",
     )
-    parser.add_argument("--version", action="version", version=f"dsharness {__version__}")
+    parser.add_argument("--version", action="version", version=f"canonkeeper {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_ingest = sub.add_parser("ingest", help="切章 + LLM 抽取 + 入库")

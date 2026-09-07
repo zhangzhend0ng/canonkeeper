@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from dsharness.extract.extractor import (
+from canonkeeper.extract.extractor import (
     ExtractionError,
     extract_chapter,
     parse_extraction,
     strip_code_fence,
 )
-from dsharness.providers.base import MockProvider
+from canonkeeper.providers.base import MockProvider
 from helpers import chapter
 
 
