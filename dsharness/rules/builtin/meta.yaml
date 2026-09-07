@@ -1,0 +1,6 @@
+# 文本技术类不变量（PLAN §4 ⑱）
+- rule_id: META_018
+  name: 别名归一（多称呼合并到实体）
+  severity: info
+  predicate: alias_collision
+  params: {}

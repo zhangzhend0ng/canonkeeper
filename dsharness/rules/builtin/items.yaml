@@ -1,0 +1,18 @@
+# 物品类不变量（PLAN §4 ⑨⑪ 的可机检子集）
+- rule_id: ITEM_009
+  name: 已毁/已耗品不得复用（修复/复得须登记）
+  severity: high
+  predicate: terminal_state_reuse
+  params:
+    attr: 状态
+    terminal_value: 已毁
+    revive_kinds: [修复, 复得, 重炼]
+
+- rule_id: ITEM_011
+  name: 交易/赠予后所有权转移须登记
+  severity: low
+  predicate: transfer_registered
+  params:
+    event_kinds: [交易, 赠予, 买卖, 交换]
+    ownership_attrs: [所有者, 所有权, 持有者]
+    window: 1

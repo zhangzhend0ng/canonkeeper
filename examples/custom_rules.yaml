@@ -1,0 +1,19 @@
+# 自定义规则示例：非修仙书的等级阶梯（PLAN §4 表驱动，加规则零代码）
+# 用法：dsh check books/demo.db --rules examples/custom_rules.yaml
+# rule_id 不得与内置规则重复；predicate 必须是 dsharness.rules.predicates 中的注册名。
+- rule_id: CUSTOM_012
+  name: 等级单调（自定义阶梯）
+  severity: high
+  predicate: realm_regression
+  params:
+    attr: 等级
+    ladder: [F级, E级, D级, C级, B级, A级, S级]
+    regress_kinds: [降级, 重置, 封印]
+
+- rule_id: CUSTOM_002
+  name: 使用年限单调（自定义数值属性示例）
+  severity: medium
+  predicate: numeric_attr_monotonic
+  params:
+    attr: 使用年限
+    regress_kinds: [重置]

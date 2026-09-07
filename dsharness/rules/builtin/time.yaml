@@ -1,0 +1,7 @@
+# 时间类不变量（PLAN §4 ⑥ 的可机检子集；依赖抽取的 day_offset，模糊时间自动跳过）
+- rule_id: TIME_006
+  name: 故事时间单调（闪回须显式标记）
+  severity: medium
+  predicate: time_regression
+  params:
+    flashback_markers: [闪回, 回忆, 回想, 倒叙]
