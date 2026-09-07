@@ -37,6 +37,12 @@ def test_payload_values_flattened_to_str() -> None:
     assert e.payload == {"金额": "100", "地点": "坊市"}
 
 
+def test_pronoun_aliases_dropped_at_boundary() -> None:
+    """代词不得进入别名空间（闭集判定在代码层，模型侧只是尽力）。"""
+    e = EntityMention(name="林末", aliases=["他", "对方", "林师弟", "这位"])
+    assert e.aliases == ["林师弟"]
+
+
 def test_empty_name_rejected() -> None:
     with pytest.raises(Exception, match="name"):
         EntityMention(name="  ")

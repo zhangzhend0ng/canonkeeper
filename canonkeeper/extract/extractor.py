@@ -59,11 +59,16 @@ def parse_extraction(raw: str, chapter_number: int) -> ChapterExtraction:
 
 
 def extract_chapter(
-    provider: Provider, chapter: Chapter, *, tier: Tier = Tier.FAST
+    provider: Provider,
+    chapter: Chapter,
+    *,
+    tier: Tier = Tier.FAST,
+    temperature: float = 0.0,
 ) -> ChapterExtraction:
-    """单章抽取：一次调用 + 一次错误反馈重试。"""
+    """单章抽取：一次调用 + 一次错误反馈重试。抽取默认温度 0（往返可复现，
+    稳定性是 M0 验收指标；需要多样性时显式传参）。"""
     messages = build_messages(chapter)
-    raw = provider.chat(messages, tier=tier, json_mode=True)
+    raw = provider.chat(messages, tier=tier, json_mode=True, temperature=temperature)
     try:
         return parse_extraction(raw, chapter.number)
     except ExtractionError as first_error:
@@ -75,13 +80,15 @@ def extract_chapter(
                 "content": f"上面的输出不合规（{first_error}）。请重新只输出一个符合给定 JSON Schema 的对象，不要任何其他文本。",
             },
         ]
-        raw_retry = provider.chat(retry_messages, tier=tier, json_mode=True)
+        raw_retry = provider.chat(
+            retry_messages, tier=tier, json_mode=True, temperature=temperature
+        )
         try:
             return parse_extraction(raw_retry, chapter.number)
         except ExtractionError as retry_error:
-                raise ExtractionError(
-                    f"第{chapter.number}章: 抽取重试后仍失败 — {retry_error}"
-                ) from first_error
+            raise ExtractionError(
+                f"第{chapter.number}章: 抽取重试后仍失败 — {retry_error}"
+            ) from first_error
 
 
 def extract_book(
@@ -89,6 +96,7 @@ def extract_book(
     chapters: Sequence[Chapter],
     *,
     tier: Tier = Tier.FAST,
+    temperature: float = 0.0,
     skip_errors: bool = False,
     progress: Callable[[int, int, ChapterExtraction | None], None] | None = None,
 ) -> list[ChapterExtraction]:
@@ -98,7 +106,7 @@ def extract_book(
     for chapter in chapters:
         extraction: ChapterExtraction | None
         try:
-            extraction = extract_chapter(provider, chapter, tier=tier)
+            extraction = extract_chapter(provider, chapter, tier=tier, temperature=temperature)
         except ExtractionError:
             if not skip_errors:
                 raise

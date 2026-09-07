@@ -24,6 +24,14 @@ __all__ = [
 
 ENTITY_TYPES: tuple[str, ...] = ("人物", "物品", "地点", "组织", "功法")
 
+# 代词/泛称不得成为别名：闭集判定放代码（可复现、零漂移），不依赖模型自觉
+_PRONOUN_ALIASES = frozenset(
+    {
+        "他", "她", "它", "对方", "这人", "那人", "此人",
+        "该男子", "该女子", "此女", "此男", "那名男子", "那名女子", "这位",
+    }
+)
+
 
 class _StrictBase(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
@@ -45,6 +53,13 @@ class EntityMention(_StrictBase):
             if entity_type in text:
                 return entity_type
         return "人物"
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def _drop_pronoun_aliases(cls, value: Any) -> Any:
+        if isinstance(value, list):
+            return [a for a in value if str(a).strip() not in _PRONOUN_ALIASES]
+        return value
 
 
 class StateChange(_StrictBase):
