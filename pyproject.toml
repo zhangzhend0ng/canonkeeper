@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dsharness"
-version = "0.1.0"
+version = "0.2.0"
 description = "网文长篇三级验证 harness：状态库 + 硬验证器（纯程序化规则引擎）+ 软验证器（persona 读者）"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,13 +16,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=1.2,<2",
+]
 dev = [
     "pytest>=8.0,<10",
     "mypy>=1.8",
     "types-PyYAML",
+    "mcp>=1.2,<2",
 ]
 
 [project.scripts]
+dsharness = "dsharness.cli:main"
+dsharness-mcp = "dsharness.mcp:main"
+# 遗留别名：deepseek-harness 的 CLI 也叫 dsh，同环境安装会撞名，优先用 dsharness
 dsh = "dsharness.cli:main"
 
 [tool.setuptools.packages.find]

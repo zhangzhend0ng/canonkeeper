@@ -19,8 +19,11 @@
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -e ".[dev]"      # Windows；Linux/macOS 用 .venv/bin/
-.venv/Scripts/pytest                        # 69 项单测，全部离线
+.venv/Scripts/pytest                        # 75 项单测，全部离线
 ```
+
+命令行入口：`dsharness`（主）、`dsharness-mcp`（MCP server）。`dsh` 仅作遗留别名保留——
+deepseek-harness 的 CLI 也叫 `dsh`，同环境安装会撞名。
 
 ## 配置（密钥只走环境变量，绝不写入代码/配置/日志）
 
@@ -36,12 +39,12 @@ python -m venv .venv
 ## 用法
 
 ```bash
-dsh ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--skip-errors]
-dsh check   books/demo.db                       # 规则引擎，冲突写回状态库
-dsh report  books/demo.db                       # markdown 冲突报告 → reports/
-dsh replay  books/demo.db 3                     # 回放第3章抽取 JSON（往返核对）
-dsh stability book.txt --provider deepseek --runs 2   # M0 验收：抽取往返稳定性
-dsh rules                                        # 列出内置规则
+dsharness ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--skip-errors]
+dsharness check   books/demo.db                  # 规则引擎，冲突写回状态库
+dsharness report  books/demo.db                  # markdown 冲突报告 → reports/
+dsharness replay  books/demo.db 3                # 回放第3章抽取 JSON（往返核对）
+dsharness stability book.txt --provider deepseek --runs 2  # M0 验收：抽取往返稳定性
+dsharness rules                                  # 列出内置规则
 ```
 
 无 API key 时可用 `--provider mock` 跑通全链路（返回与正文无关的固定样例抽取）。
@@ -64,6 +67,27 @@ dsh rules                                        # 列出内置规则
 PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数字复述一致、代词指代…）
 需要更强的抽取契约支撑，按里程碑逐步补谓词。
 
+## 作为 dsh（deepseek-harness）插件接入（MCP）
+
+[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（CLI 名 `dsh`，
+"everything is a plugin"）的插件一等公民是 TypeScript/Cordis；Python 工具包的标准接入路径是
+**MCP server**。本仓库内置两端：
+
+- **MCP server**（`dsharness/mcp.py`，`pip install "dsharness[mcp]"` 后由 `dsharness-mcp` 启动），
+  工具面对应 PLAN M3 生成回路：
+
+  | 工具 | 时机 | 作用 |
+  |---|---|---|
+  | `ingest_book` | 写后 | 切章 + LLM 抽取 + 入库 |
+  | `check_consistency` | 写后 | 规则引擎冲突清单（JSON，纯程序化判定） |
+  | `query_entity` | 写前 | 按名/别名查实体属性、状态史、关系、出场章 |
+  | `replay_chapter` | 复核 | 回放某章抽取 JSON，定位误报来源 |
+  | `get_report` | 复核 | markdown 冲突报告全文 |
+
+- **dsh bundle**（[plugin/](plugin/)）：薄壳，只插一行 `@deepseek-ai/dsh-mcp-client` 配置。
+  安装：`dsh plugin --profile <name> add file:<repo>/plugin`，工具即以
+  `mcp__dsharness__*` 出现在模型工具列表。详见 [plugin/README.md](plugin/README.md)。
+
 ## 当前状态
 
 - **M0 完成**：provider 层（deepseek/glm/mock + 分级档位）、切章、抽取管线
@@ -72,6 +96,8 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
 - **M1 起步**：规则引擎 + 8 条内置规则 + 报告。计划 20 条中其余谓词逐步接入。
   自定义规则示例：`dsh check books/demo.db --rules examples/custom_rules.yaml`。
 - **M2 占位**：persona 契约与内置画像已定义（`readers/personas.py`），模拟实现待 M2。
+- **dsh 插件接入（MCP）**：server + bundle 完成，stdio 端到端测试覆盖；对真实 dsh
+  运行时的挂载验证待安装 dsh 环境后进行。
 - 重建策略：`rebuild()` 以全书抽取为事实源单事务全量重建；增量追章优化留后续里程碑。
 
 ## 工程约定

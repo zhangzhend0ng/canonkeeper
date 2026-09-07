@@ -1,0 +1,20 @@
+# 把 dsharness 的 MCP server 挂进 dsh（deepseek-ai/deepseek-harness）。
+# 生效后模型工具列表出现 mcp__dsharness__ingest_book / check_consistency /
+# query_entity / replay_chapter / get_report。
+#
+# 前提：已在 dsh 宿主可用的环境装好 Python 包：
+#   pip install "dsharness[mcp]"        （dsharness-mcp 命令进入 PATH）
+# dsh 的 stdio 环境会被净化，密钥不透传，因此这里显式从宿主进程转发：
+- insert:
+    - id: mcp-dsharness
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: dsharness
+        transport: stdio
+        command: dsharness-mcp
+        args: []
+        env:
+          DEEPSEEK_API_KEY: !!js process.env.DEEPSEEK_API_KEY
+          ZHIPU_API_KEY: !!js process.env.ZHIPU_API_KEY
+          DSH_FAST_MODEL: !!js process.env.DSH_FAST_MODEL
+          DSH_FLAGSHIP_MODEL: !!js process.env.DSH_FLAGSHIP_MODEL

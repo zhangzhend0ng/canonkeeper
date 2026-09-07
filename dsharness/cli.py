@@ -17,10 +17,11 @@ from typing import Callable, Sequence
 from . import __version__
 from .extract import ChapterExtraction, ExtractionError, extract_book, extract_chapter
 from .ingest import Chapter, load_book_text, split_chapters
-from .providers.base import Provider, ProviderError, get_provider, known_providers
+from .pipeline import ingest_book_to_db, run_check
+from .providers.base import ProviderError, get_provider, known_providers
 from .report.render import render_report
-from .rules.engine import RuleError, builtin_rules_dir, load_builtin_rules, load_rules, run_rules
-from .store.db import StateDB, build_book_view
+from .rules.engine import RuleError, load_builtin_rules
+from .store.db import StateDB
 
 __all__ = ["main"]
 
@@ -39,62 +40,31 @@ def _progress(now: int, total: int, extraction: ChapterExtraction | None) -> Non
     print(f"[{now}/{total}] {title} — {detail}", file=sys.stderr)
 
 
-def _provider_models(provider: Provider) -> dict[str, str]:
-    model_names = getattr(provider, "model_names", None)
-    if callable(model_names):
-        return dict(model_names())
-    return {"fast": provider.name, "flagship": provider.name}
-
-
 # -- 子命令 ---------------------------------------------------------------
 
 
 def _cmd_ingest(args: argparse.Namespace) -> int:
-    provider = get_provider(args.provider)
-    chapters = split_chapters(load_book_text(args.book))
-    if not chapters:
-        print("错误: 未切出任何章节（书稿为空？）", file=sys.stderr)
-        return 1
-    if args.limit > 0:
-        chapters = chapters[: args.limit]
-    print(f"切章 {len(chapters)} 章，provider={args.provider}，开始抽取…", file=sys.stderr)
-    extractions = extract_book(
-        provider, chapters, skip_errors=args.skip_errors, progress=_progress
+    print(f"provider={args.provider}，开始切章与抽取…", file=sys.stderr)
+    stats = ingest_book_to_db(
+        args.book,
+        args.db,
+        args.provider,
+        limit=args.limit,
+        skip_errors=args.skip_errors,
+        progress=_progress,
     )
-    db = StateDB(args.db)
-    try:
-        resolver = db.rebuild(extractions)
-        models = _provider_models(provider)
-        db.set_meta("book_title", Path(args.book).name)
-        db.set_meta("provider", args.provider)
-        db.set_meta("model_fast", models.get("fast", "?"))
-        db.set_meta("model_flagship", models.get("flagship", "?"))
-        db.set_meta("ingested_at", datetime.now().astimezone().isoformat(timespec="seconds"))
-    finally:
-        db.close()
-    print(f"入库完成: {args.db}（{len(extractions)} 章 / 实体 {len(resolver.entities)}）")
+    print(f"入库完成: {args.db}（{stats.chapters} 章 / 实体 {stats.entities}）")
     return 0
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    rule_paths = sorted(builtin_rules_dir().glob("*.yaml"))
-    rule_paths += [Path(p) for p in (args.rules or [])]
-    rules = load_rules(rule_paths)
-    db = StateDB(args.db)
-    try:
-        violations = run_rules(rules, build_book_view(db))
-        db.replace_violations(violations)
-    finally:
-        db.close()
-    print(
-        f"检查完成: 规则 {len(rules)} 条, 冲突 {len(violations)} 条"
-        f"（已写入 {args.db}）"
-    )
+    rule_count, violations = run_check(args.db, args.rules or [])
+    print(f"检查完成: 规则 {rule_count} 条, 冲突 {len(violations)} 条（已写入 {args.db}）")
     for violation in violations[:20]:
         chapter = f"第{violation.chapter}章" if violation.chapter else "全书"
         print(f"  [{violation.severity}] {violation.rule_id} {chapter}: {violation.message}")
     if len(violations) > 20:
-        print(f"  …其余 {len(violations) - 20} 条请用 `dsh report` 查看")
+        print(f"  …其余 {len(violations) - 20} 条请用 `dsharness report` 查看")
     return 0
 
 
@@ -215,10 +185,10 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="dsh",
+        prog="dsharness",
         description="dsharness —— 网文长篇三级验证 harness（见 PLAN.md）",
     )
-    parser.add_argument("--version", action="version", version=f"dsh {__version__}")
+    parser.add_argument("--version", action="version", version=f"dsharness {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_ingest = sub.add_parser("ingest", help="切章 + LLM 抽取 + 入库")
@@ -266,7 +236,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("缺少子命令")
     try:
         return int(command(args))
-    except (ProviderError, ExtractionError, RuleError, OSError) as exc:
+    except (ProviderError, ExtractionError, RuleError, ValueError, OSError) as exc:
         if getattr(args, "debug", False):
             raise
         print(f"错误: {exc}", file=sys.stderr)  # 顶层唯一错误出口

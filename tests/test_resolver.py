@@ -13,6 +13,7 @@ def test_first_seen_name_is_canonical() -> None:
     found = resolver.lookup("林师弟")
     assert found is not None
     assert found.name == "林昼"
+    assert "林师弟" in found.aliases  # 别名必须进入实体集合（入库后供别名查询）
     assert found.attrs == {"境界": "筑基"}  # 后章属性覆盖
     assert found.first_chapter == 1 and found.last_chapter == 2
 

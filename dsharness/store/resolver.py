@@ -72,7 +72,8 @@ class EntityResolver:
             self._register_alias(alias, known.entity_id)
             return known
         if merge_into is not None:
-            # 已知别名挂到了别的实体上 → 冲突登记，归一到 merge_into（首次 sighting 优先）
+            # 别名并入规范实体（若该别名已属另一实体，_register_alias 会记入 collisions）
+            merge_into.aliases.add(alias)
             self._register_alias(alias, merge_into.entity_id)
             return merge_into
 
