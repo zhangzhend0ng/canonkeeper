@@ -1,0 +1,190 @@
+# 评测基准：事实级查全标注
+#
+# 用途：衡量「结构化抽取」对章节关键事实的查全率（recall），替换手工对账。
+# 版权边界：第三方版权文本的原文不入仓库（见 .gitignore books/ 与本目录说明），
+# 标注只含事实与 ≤25 字定位引文（研究性注释用途）。
+#
+# 事实类型（kind）与匹配方式：
+#   number  — 数值事实。value 按原文写法；命中=出现在抽取结果的「结构化字段」
+#             （attrs 值 / event payload 值 / state_change old|new / story_time），
+#             不含 quote 与 summary（那是原文回显，不算结构化捕获）。
+#   entity  — 具名实体。命中=出现在本章抽取的 entities 名字或别名中（type 作参考不强制）。
+#   attr    — 实体属性。命中=实体出现 ∧ attrs 存在模糊匹配的键 ∧ 值包含 value。
+#   change  — 状态变更。命中=state_change 中实体+属性模糊匹配 ∧ new 包含 value。
+#   event   — 情节节拍。命中=event.kind 与 kind_name 双向包含 ∧（如给 entities）全部出现。
+#   relation— 关系。命中=relations 中双方匹配 ∧ kind 双向包含。
+#   time    — 章节 day_offset。仅当 must:true 时计分（存疑标注用 must:false 并写 note）。
+#   signal  — 软信号（伏笔/钩子/承诺）。keywords 任一出现在抽取 JSON 任意处即命中；
+#             单列指标，不进主查全分。
+#
+# 每条 fact 可带 must: false（不计分，仅报告）；note 供漏报排查。
+
+- book: 艾尔德兰
+  chapter: 1
+  text: aierdelan-ch1.txt
+  facts:
+    # ---- numbers ----
+    - {id: n01, kind: number, value: "23,000,000", note: 全服广播登出队列人数}
+    - {id: n02, kind: number, value: "50次", note: 豆包每日免费额度}
+    - {id: n03, kind: number, value: "4K tokens", note: 上下文上限}
+    - {id: n04, kind: number, value: "1.3秒", note: 豆包分析耗时}
+    - {id: n05, kind: number, value: "2027年3月", note: 艾尔德兰公测时间}
+    - {id: n06, kind: number, value: "2026年12月", note: 豆包训练数据截止}
+    - {id: n07, kind: number, value: "6级", note: 林末等级}
+    - {id: n08, kind: number, value: "5金币", note: 初始金币/药水商人定价}
+    - {id: n09, kind: number, value: "0.7金币", note: 药水材料成本}
+    - {id: n10, kind: number, value: "3金币", note: 林末定价/床位费}
+    - {id: n11, kind: number, value: "7瓶", note: 制作与售出数量}
+    - {id: n12, kind: number, value: "17分钟", note: 售罄时长}
+    - {id: n13, kind: number, value: "16金币", note: 净赚}
+    - {id: n14, kind: number, value: "46次", note: 今日剩余调用}
+    - {id: n15, kind: number, value: "十分钟", note: 观察商人成交窗口}
+    # ---- entities ----
+    - {id: e01, kind: entity, name: 林末, aliases: [他], type: 人物}
+    - {id: e02, kind: entity, name: 豆包, aliases: [浮窗, 豆包App], type: 物品}
+    - {id: e03, kind: entity, name: 艾尔德兰, type: 地点}
+    - {id: e04, kind: entity, name: 艾尔村, aliases: [新手村], type: 地点}
+    - {id: e05, kind: entity, name: 药水商人, type: 人物}
+    - {id: e06, kind: entity, name: 刺客, type: 人物}
+    - {id: e07, kind: entity, name: 酒馆, type: 地点}
+    - {id: e08, kind: entity, name: NPC药剂师, type: 人物, must: false}
+    # ---- attrs ----
+    - {id: a01, kind: attr, entity: 豆包, attr: 连接状态, value: 受限}
+    - {id: a02, kind: attr, entity: 豆包, attr: 剩余次数, value: 46}
+    - {id: a03, kind: attr, entity: 林末, attr: 等级, value: 6}
+    - {id: a04, kind: attr, entity: 林末, attr: 金币, value: 21}
+    # ---- changes ----
+    - {id: c01, kind: change, entity: 林末, attr: 金币, new: 21, note: 5→21 卖药水}
+    - {id: c02, kind: change, entity: 豆包, attr: 剩余次数, new: 46, note: 50→46}
+    - {id: c03, kind: change, entity: 林末, attr: 位置, new: 酒馆, must: false}
+    # ---- events ----
+    - {id: v01, kind: event, kind_name: 排队, note: 全服广播登出队列}
+    - {id: v02, kind: event, kind_name: 售卖, entities: [林末]}
+    - {id: v03, kind: event, kind_name: 租借, note: 酒馆床位3金币一晚}
+    - {id: v04, kind: event, kind_name: 邮件, note: 匿名警告邮件}
+    - {id: v05, kind: event, kind_name: 观察, note: 蹲守药水商人十分钟六单}
+    - {id: v06, kind: event, kind_name: 制作, entities: [林末], note: 手搓药水7瓶}
+    - {id: v07, kind: event, kind_name: 分析, note: 4次调用定价3金币}
+    - {id: v08, kind: event, kind_name: 穿越, entities: [林末], must: false}
+    # ---- relation / time / signal ----
+    - {id: r01, kind: relation, subject: 林末, object: 豆包, rel: 所属, must: false}
+    - {id: t01, kind: time, day_offset: 3, note: 「这是第三天」}
+    - {id: f01, kind: signal, keywords: [刺客], note: 伏笔：挂机刺客跳下走向林末}
+
+- book: 艾尔德兰
+  chapter: 2
+  text: aierdelan-ch2.txt
+  facts:
+    - {id: n01, kind: number, value: "50次", note: 当日额度重置}
+    - {id: n02, kind: number, value: "47次", note: 文中自报剩余（与50-4=46矛盾，疑似源稿不一致）}
+    - {id: n03, kind: number, value: "24次", note: 矿洞中剩余}
+    - {id: n04, kind: number, value: "3次", note: 副本失败后剩余（24-7≠3，疑似源稿不一致）}
+    - {id: n05, kind: number, value: "12颗", note: 暗影石数量}
+    - {id: n06, kind: number, value: "1.2金币", note: 暗影石买入均价}
+    - {id: n07, kind: number, value: "2.5金币", note: 暗影石卖出价}
+    - {id: n08, kind: number, value: "15.6金币", note: 暗影石净赚}
+    - {id: n09, kind: number, value: "31.6金币", note: 面板总金币（与18+15.6=33.6矛盾，疑似源稿不一致）}
+    - {id: n10, kind: number, value: "500金币", note: 首杀赏金}
+    - {id: n11, kind: number, value: "17级", note: 烽火等级}
+    - {id: n12, kind: number, value: "15次", note: 分析10个NPC的调用}
+    - {id: e01, kind: entity, name: 烽火, type: 人物}
+    - {id: e02, kind: entity, name: 影子伯爵, type: 人物}
+    - {id: e03, kind: entity, name: 暗影石, type: 物品}
+    - {id: e04, kind: entity, name: 闪光突刺, type: 功法}
+    - {id: e05, kind: entity, name: 北边废矿, aliases: [矿洞], type: 地点}
+    - {id: e06, kind: entity, name: 铁匠, type: 人物}
+    - {id: a01, kind: attr, entity: 烽火, attr: 等级, value: 17}
+    - {id: c01, kind: change, entity: 林末, attr: 金币, new: 31.6}
+    - {id: c02, kind: change, entity: 林末, attr: 调用次数, new: 47, must: false, note: 或记在豆包名下}
+    - {id: c03, kind: change, entity: 林末, attr: 调用次数, new: 24, must: false}
+    - {id: c04, kind: change, entity: 林末, attr: 调用次数, new: 3, must: false}
+    - {id: v01, kind: event, kind_name: 交易, entities: [林末, 暗影石]}
+    - {id: v02, kind: event, kind_name: 探索, entities: [林末, 北边废矿]}
+    - {id: v03, kind: event, kind_name: 发现, note: 残页}
+    - {id: v04, kind: event, kind_name: 战斗, entities: [影子伯爵], note: 副本失败}
+    - {id: v05, kind: event, kind_name: 委托, note: 500金币六人平分邀请}
+    - {id: t01, kind: time, day_offset: 4, note: 第1章第三天晚上→本章次日（「昨天的46次已清零」）}
+    - {id: f01, kind: signal, keywords: [闪光突刺], note: 伏笔：技能书合成需铁匠好感度}
+
+- book: 艾尔德兰
+  chapter: 3
+  text: aierdelan-ch3.txt
+  facts:
+    - {id: n01, kind: number, value: "38金币", note: 账户余额}
+    - {id: n02, kind: number, value: "200金币", note: 公会委托酬金}
+    - {id: n03, kind: number, value: "300", note: 神秘邮件悬赏酬金}
+    - {id: n04, kind: number, value: "23个", note: 新手村NPC数}
+    - {id: n05, kind: number, value: "15级", note: 副本等级}
+    - {id: n06, kind: number, value: "11分钟", note: Boss战录像时长}
+    - {id: n07, kind: number, value: "4.9秒", note: 技能循环周期}
+    - {id: n08, kind: number, value: "50次", note: 每天调用全押}
+    - {id: e01, kind: entity, name: 破晓, aliases: [破晓公会], type: 组织}
+    - {id: e02, kind: entity, name: 药剂商, type: 人物}
+    - {id: e03, kind: entity, name: 神秘ID, type: 人物, must: false, note: 第三方文本中为悬念人物}
+    - {id: c01, kind: change, entity: 林末, attr: 金币, new: 238}
+    - {id: v01, kind: event, kind_name: 委托, entities: [破晓], note: Boss机制分析}
+    - {id: v02, kind: event, kind_name: 收款, note: 200金币到账}
+    - {id: v03, kind: event, kind_name: 邮件, note: 神秘ID悬赏查原材料采购人}
+    - {id: t01, kind: time, day_offset: 5, must: false, note: 文本自称「第三天」与第1章第三天冲突——本身是疑似时间线问题，评测不计分只报告}
+    - {id: f01, kind: signal, keywords: [查他, 调查, 原材料], note: 钩子：有人在查「采购天衣无缝的人」}
+
+- book: 没钱修什么仙
+  chapter: 1
+  text: qianxian-ch1.txt
+  source_note: 热门文扫描稿（七猫男频大热榜），原文不入仓库，标注仅含事实与定位短语
+  facts:
+    # ---- numbers ----
+    - {id: n01, kind: number, value: "两个小时", note: 嵩阳市学生日均睡眠}
+    - {id: n02, kind: number, value: "五个小时", note: 张羽睡眠时长}
+    - {id: n03, kind: number, value: "一万个小时", note: 九年差距}
+    - {id: n04, kind: number, value: "9岁", alt: ["九岁"], note: 入读小学年龄}
+    - {id: n05, kind: number, value: "18岁", alt: ["十八岁"], note: 入高中年龄}
+    - {id: n06, kind: number, value: "900克", note: 牛妖补剂日发量}
+    - {id: n07, kind: number, value: "十倍", note: 补剂修炼效果}
+    - {id: n08, kind: number, value: "五千", note: 后备金}
+    - {id: n09, kind: number, value: "1000块", note: 母亲转账}
+    - {id: n10, kind: number, value: "两万", note: 租借天灵根花费}
+    - {id: n11, kind: number, value: "70万", alt: ["七十多万"], note: 原身债务总额}
+    - {id: n12, kind: number, value: "五十多块", note: 账户余额}
+    - {id: n13, kind: number, value: "60点", note: 炼气突破筑基法力要求}
+    - {id: n14, kind: number, value: "100点", note: 炼气法力上限}
+    - {id: n15, kind: number, value: "650分", note: 仙道科目总分}
+    - {id: n16, kind: number, value: "50分", note: 通识科总分}
+    - {id: n17, kind: number, value: "500块", note: 白真真转账}
+    - {id: n18, kind: number, value: "三周", note: 距月考时间}
+    - {id: n19, kind: number, value: "三十六层", alt: ["36层", "三十六"], note: 昆墟地上层数}
+    - {id: n20, kind: number, value: "十八层", alt: ["18层", "十八"], note: 昆墟地下层数}
+    - {id: n21, kind: number, value: "第10名", alt: ["第十名"], note: 张羽高一年级排名}
+    - {id: n22, kind: number, value: "20多万", alt: ["二十多万"], note: 白真真债务}
+    # ---- entities ----
+    - {id: e01, kind: entity, name: 张羽, type: 人物}
+    - {id: e02, kind: entity, name: 白真真, type: 人物}
+    - {id: e03, kind: entity, name: 嵩阳高中, aliases: [嵩阳高级仙道中学], type: 组织}
+    - {id: e04, kind: entity, name: 昆墟, type: 地点}
+    - {id: e05, kind: entity, name: 嵩阳市, type: 地点}
+    - {id: e06, kind: entity, name: 母亲, type: 人物}
+    - {id: e07, kind: entity, name: 掌心符号, aliases: [符号], type: 物品}
+    - {id: e08, kind: entity, name: 神经兴奋填充剂, type: 物品}
+    - {id: e09, kind: entity, name: 万魂幡, type: 物品}
+    - {id: e10, kind: entity, name: 东阳初级中学, type: 组织}
+    # ---- attrs ----
+    - {id: a01, kind: attr, entity: 昆墟, attr: 层, value: 36, note: 地上三十六层}
+    - {id: a02, kind: attr, entity: 白真真, attr: 排名, value: 第一, note: 高一总分第一}
+    - {id: a03, kind: attr, entity: 张羽, attr: 债务, value: 70, note: 七十多万}
+    # ---- changes ----
+    - {id: c01, kind: change, entity: 掌心符号, attr: 状态, new: 十分之一, note: 透明→黑1/10, must: false}
+    - {id: c02, kind: change, entity: 掌心符号, attr: 状态, new: 一半, note: 填满一半, must: false}
+    - {id: c03, kind: change, entity: 张羽, attr: 债务, new: 70, note: 汇总负债}
+    # ---- events ----
+    - {id: v01, kind: event, kind_name: 面试, entities: [张羽], note: 荒诞设定层层加码}
+    - {id: v02, kind: event, kind_name: 穿越, entities: [张羽], note: 天台仪式后醒来}
+    - {id: v03, kind: event, kind_name: 借钱, entities: [白真真, 张羽], note: 下跪借钱}
+    - {id: v04, kind: event, kind_name: 转账, entities: [白真真], note: 500块}
+    - {id: v05, kind: event, kind_name: 催收, note: 逾期电话与短信}
+    - {id: v06, kind: event, kind_name: 复盘, note: 两人翻借贷流水}
+    - {id: v07, kind: event, kind_name: 离家, entities: [母亲], note: 母亲不辞而别, must: false}
+    # ---- relation / time / signal ----
+    - {id: r01, kind: relation, subject: 白真真, object: 张羽, rel: 同学}
+    - {id: t01, kind: time, day_offset: 1, note: 「穿越异世界才第一天」}
+    - {id: f01, kind: signal, keywords: [填满, 填充], note: 章尾钩子：符号今晚填满，会发生什么}
+    - {id: f02, kind: signal, keywords: [什么都行], note: 承诺：白真真「帮还债做什么都行」}

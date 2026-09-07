@@ -88,6 +88,38 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
   安装：`dsh plugin --profile <name> add file:<repo>/plugin`，工具即以
   `mcp__canonkeeper__*` 出现在模型工具列表。详见 [plugin/README.md](plugin/README.md)。
 
+## 评测基准（evals）
+
+事实级查全评测，代替手工对账成为质量门：标注 YAML（数值/实体/属性/变更/事件/关系/时间/信号
+八类事实）+ 评测器。**number 只认结构化字段**（attrs 值/payload 值/change old|new），
+quote 原文回显不算捕获——与人工对账同口径。版权边界：第三方热门文原文不入仓库，
+`--texts` 指向本地目录，标注仅含事实与 ≤25 字定位短语。
+
+```bash
+.venv/Scripts/python evals/run_eval.py --labels evals/labels/bench-v1.yaml \
+    --texts <本地章节目录> --provider deepseek --out evals/results/latest.md
+```
+
+当前基线（bench-v1：艾尔德兰 3 章 + 热门财务流第 1 章万字体量，deepseek-chat）：
+
+| 品类 | number | entity | attr | change | event | relation | time | signal |
+|---|---|---|---|---|---|---|---|---|
+| 查全 | 75% | 84% | 38% | 40% | 62% | 0% | 33% | 80% |
+
+关键发现：**对参与过 prompt 迭代的自家书查全显著偏高（数字 87%），未见过的热门文仅 45%**
+——对自家书过拟合是真实风险，基准必须含未见书。短板排序：世界观规则数字（法力 60/100、
+科目分值）、实体属性快照、状态变更链、关系抽取（0%）、跨章时间。标注与新增章节的
+格式见 `evals/labels/bench-v1.yaml` 头部注释。
+
+## 写作知识库（docs/craft/）
+
+M2 persona 与 M3 生成回路的领域弹药库，每条技法按「机理 → 一致性要求 → 可机检信号」组织：
+
+- [长篇网文写作技巧](docs/craft/longform-webnovel-craft.md)：金手指预算规则、爽点循环、
+  承诺管理、信息差、数字叙事、卷结构、配角退场纪律、反派阶梯、章末钩子、追读设计
+- [文学素养基础](docs/craft/literary-craft.md)：动机与弧光、场景三要素、展示而非陈述、
+  对白潜台词、伏笔公平性、时序节奏、POV 纪律、时钟张力、主题母题
+
 ## 当前状态
 
 - **M0 完成（真实 API，两轮质量迭代，2026-09-07/08）**：provider 层（deepseek/glm/mock + 分级
@@ -102,6 +134,9 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
   - 已知缺口（下一杠杆）：day_offset 需跨章上下文（单章自算：3/None/3，应为 3/4/5）；
     金币账 old 回填在章界断裂（第 1 章末 21 vs 第 2 章 old=16）；伏笔节拍（刺客接近）仍漏；
     双遍抽取交叉 + 旗舰复核（PLAN §8）未做。glm 适配器未实测（无 ZHIPU_API_KEY）。
+  - **评测基线（evals，2026-09-08）**：自建事实级基准实测 overall——number 75%、entity 84%、
+    attr 38%、change 40%、event 62%、relation 0%、time 33%。自家书数字 87% vs 未见热门文 45%，
+    过拟合风险实锤。详见上方「评测基准」。
 - **M1 起步**：规则引擎 + 8 条内置规则 + 报告。计划 20 条中其余谓词逐步接入；
   金钱流水守恒（⑮）与数字复述一致（⑳）因账本数据已可抽取，列入下一批。
   自定义规则示例：`canonkeeper check books/demo.db --rules examples/custom_rules.yaml`。

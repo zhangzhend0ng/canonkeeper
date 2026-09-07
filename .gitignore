@@ -11,6 +11,8 @@ dist/
 # 用户自有文稿与产物（PLAN §6/§8 版权边界）
 books/
 reports/
+# 评测缓存含抽取原文引文，不入仓库；标注(labels)仅含事实与短定位短语，可入库
+evals/results/cache/
 
 # 状态库与密钥
 *.db
