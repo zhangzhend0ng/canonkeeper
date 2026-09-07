@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
       - name: 安装
         run: python -m pip install -e ".[dev]"
-      - name: 合成 fixture 基准（回归门禁；需仓库 Secret: DEEPSEEK_API_KEY）
+      - name: 合成 fixture 基准（回归门禁，需仓库 Secret DEEPSEEK_API_KEY）
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
