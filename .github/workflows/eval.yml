@@ -1,9 +1,9 @@
-name: eval
-on:
+"on":
   workflow_dispatch:
     inputs:
       samples:
         description: "自洽采样遍数"
+        type: string
         default: "3"
 
 jobs:
