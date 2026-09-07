@@ -36,17 +36,20 @@ def ingest_book_to_db(
     provider_name: str = "deepseek",
     *,
     limit: int = 0,
+    samples: int = 1,
     skip_errors: bool = False,
     progress: Callable[[int, int, ChapterExtraction | None], None] | None = None,
 ) -> IngestStats:
-    """切章 → 逐章抽取 → 入库（含元信息标注）。返回统计。"""
+    """切章 → 逐章抽取 → 入库（含元信息标注）。samples>1 时自洽采样并集合并。返回统计。"""
     provider = get_provider(provider_name)
     chapters = split_chapters(load_book_text(book))
     if not chapters:
         raise ValueError(f"未切出任何章节（书稿为空或路径不对）: {book}")
     if limit > 0:
         chapters = chapters[:limit]
-    extractions = extract_book(provider, chapters, skip_errors=skip_errors, progress=progress)
+    extractions = extract_book(
+        provider, chapters, samples=samples, skip_errors=skip_errors, progress=progress
+    )
     with StateDB(db) as state:
         resolver = state.rebuild(extractions)
         models = _provider_models(provider)

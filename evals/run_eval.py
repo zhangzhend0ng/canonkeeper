@@ -31,8 +31,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from canonkeeper.extract.extractor import extract_chapter  # noqa: E402
+from canonkeeper.extract.extractor import PreviousState, extract_chapter  # noqa: E402
 from canonkeeper.extract.schemas import ChapterExtraction  # noqa: E402
+from canonkeeper.extract.extractor import ExtractionError  # noqa: E402
 from canonkeeper.ingest.splitter import Chapter  # noqa: E402
 from canonkeeper.providers.base import get_provider  # noqa: E402
 
@@ -169,30 +170,50 @@ def match_fact(fact: dict[str, Any], ext: ChapterExtraction) -> bool:
 
 
 def get_extraction(
-    provider: Any, block: dict[str, Any], texts_root: Path, cache_dir: Path
+    provider: Any,
+    block: dict[str, Any],
+    texts_root: Path,
+    cache_dir: Path,
+    samples: int,
+    context: PreviousState | None,
 ) -> ChapterExtraction:
-    """带磁盘缓存的章节抽取：同标注同文本不重复烧 API（评测会反复迭代）。"""
-    key = norm(f"{block['book']}-第{block['chapter']}章")
+    """带磁盘缓存的章节抽取：同标注同参数不重复烧 API（评测会反复迭代）。"""
+    key = norm(f"{block['book']}-第{block['chapter']}章-s{samples}-gao")
     cache_path = cache_dir / f"{key}.json"
     if cache_path.exists():
         return ChapterExtraction.model_validate_json(cache_path.read_text(encoding="utf-8"))
     raw = preprocess((texts_root / str(block["text"])).read_text(encoding="utf-8", errors="replace"))
     chapter = Chapter(number=int(block["chapter"]), title=f"第{block['chapter']}章", text=raw)
-    extraction = extract_chapter(provider, chapter)
+    extraction = extract_chapter(provider, chapter, samples=samples, context=context)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(extraction.model_dump_json(), encoding="utf-8")
     return extraction
 
 
-def run(labels_path: Path, texts_root: Path, provider_name: str, out_path: Path) -> None:
+def run(labels_path: Path, texts_root: Path, provider_name: str, out_path: Path, samples: int) -> None:
     blocks = yaml.safe_load(labels_path.read_text(encoding="utf-8"))
     provider = get_provider(provider_name)
     cache_dir = out_path.parent / "cache"
     results: list[tuple[dict[str, Any], ChapterExtraction, ChapterEval]] = []
+    error_chapters: list[str] = []
+    # 同书章节按标注顺序共享前情状态（跨章有状态抽取在评测中同样生效）
+    book_states: dict[str, PreviousState] = {}
 
     for block in blocks:
-        extraction = get_extraction(provider, block, texts_root, cache_dir)
-        evaluation = ChapterEval(book=str(block["book"]), chapter=int(block["chapter"]))
+        book = str(block["book"])
+        context = book_states.setdefault(book, PreviousState())
+        try:
+            extraction = get_extraction(provider, block, texts_root, cache_dir, samples, context)
+        except ExtractionError as exc:
+            # 抽取失败 = 该章零查全，如实计入（不让失败章节静默消失）
+            print(f"[{book} 第{block['chapter']}章] 抽取失败: {exc}")
+            extraction = ChapterExtraction(
+                chapter=int(block["chapter"]),
+                summary=f"[抽取失败] {exc}",
+            )
+            error_chapters.append(f"{book} 第{block['chapter']}章")
+        context.observe(extraction)
+        evaluation = ChapterEval(book=book, chapter=int(block["chapter"]))
         for fact in block["facts"]:
             hit = match_fact(fact, extraction)
             evaluation.add(bool(fact.get("must", True)), str(fact["kind"]), str(fact["id"]), hit)
@@ -221,6 +242,8 @@ def run(labels_path: Path, texts_root: Path, provider_name: str, out_path: Path)
         lines.append(f"| {block['book']} 第{block['chapter']}章 | " + " | ".join(cells) + " |")
     lines.append("")
     lines += ["## 分品类总查全", "", "| 品类 | 查全 |", "|---|---|"]
+    if error_chapters:
+        lines.append(f"- **抽取失败章节（按零查全计）**：{'、'.join(error_chapters)}")
     for kind in SCORED_KINDS:
         hit, total = totals[kind]
         if total:
@@ -252,9 +275,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--labels", required=True, help="标注 YAML（evals/labels/*.yaml）")
     parser.add_argument("--texts", required=True, help="章节文本根目录（版权文本不入仓库）")
     parser.add_argument("--provider", default="deepseek")
+    parser.add_argument("--samples", type=int, default=1, help="自洽采样遍数（>1 时并集合并）")
     parser.add_argument("--out", default="evals/results/latest.md")
     args = parser.parse_args(argv)
-    run(Path(args.labels), Path(args.texts), args.provider, Path(args.out))
+    run(Path(args.labels), Path(args.texts), args.provider, Path(args.out), args.samples)
     return 0
 
 

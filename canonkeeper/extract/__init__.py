@@ -1,4 +1,4 @@
-"""抽取层：LLM 结构化输出契约 + 抽取管线（PLAN §2）。"""
+"""抽取层：G&O 两段式抽取契约与管线 + 多遍合并器（PLAN §2）。"""
 
 from .schemas import (
     ChapterExtraction,
@@ -8,7 +8,14 @@ from .schemas import (
     StateChange,
     StoryTime,
 )
-from .extractor import ExtractionError, extract_book, extract_chapter, parse_extraction
+from .extractor import (
+    ExtractionError,
+    PreviousState,
+    extract_book,
+    extract_chapter,
+    parse_extraction,
+)
+from .merge import merge_extractions
 
 __all__ = [
     "ChapterExtraction",
@@ -18,7 +25,9 @@ __all__ = [
     "StateChange",
     "StoryTime",
     "ExtractionError",
+    "PreviousState",
     "extract_book",
     "extract_chapter",
     "parse_extraction",
+    "merge_extractions",
 ]

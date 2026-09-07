@@ -1,4 +1,6 @@
-"""抽取 prompt：指令 + JSON Schema 注入 + 章节正文。"""
+"""抽取 prompt（G&O 两段式，arXiv 2402.13364 的落地）：
+第一段自由收集事实笔记（不受格式约束，查全优先），第二段照 schema 组织成 JSON（不丢不编）。
+单段直出 JSON 会迫使模型边读边组织——实测压低 attr/relation 查全（见 evals 基线）。"""
 
 from __future__ import annotations
 
@@ -8,26 +10,42 @@ from functools import lru_cache
 from ..ingest.splitter import Chapter
 from .schemas import ChapterExtraction
 
-__all__ = ["SYSTEM_PROMPT", "INSTRUCTIONS", "build_messages"]
+__all__ = [
+    "SYSTEM_PROMPT",
+    "build_collect_messages",
+    "build_organize_messages",
+]
 
 SYSTEM_PROMPT = (
-    "你是网文文本结构化抽取引擎。只输出一个 JSON 对象，"
-    "不要输出解释、markdown 代码围栏或任何其他文本。"
+    "你是网文文本结构化抽取引擎。第一遍任务只输出事实笔记，第二遍任务只输出一个 JSON 对象，"
+    "严格按当次指令执行，不要输出多余文本。"
 )
 
-INSTRUCTIONS = """\
-从下面的章节正文中做完备的结构化抽取。本结果是设定一致性检查的数据底座：漏记 = 检查盲区。
-- 实体完备: 登记正文中出现的全部具名实体(人物/物品/材料/技能/地点/组织), 有名字就要登记, 不要只挑主要角色; aliases 收全本章出现的所有称呼。注意: 代词与泛指(他/她/它/对方/这家伙/那人)不得进 aliases; 材料与道具(草药/矿石/布料/药水)的 type 是 物品 不是 人物; 技能与功法(招式/书)的 type 是 功法; AI/系统类存在按其载体定(应用/道具→物品)。
-- 数字纪律(最重要): 正文出现的每一个数值都必须落库, 禁止遗漏——
-  · 持续属性 → 实体 attrs: 余额/剩余次数/每日额度/等级/单价标签/库存/上下文上限/截止日期/公测日期/位置等;
-  · 一次性事实 → 所在 event 的 payload: 单价/数量/总价/利润/成本/时长/次数/人数/距离/期限/酬金等;
-  · 例: 售卖药水事件 payload 应含 {定价:3金币, 数量:7瓶, 时长:17分钟, 利润:16金币}。数值保留原文写法。
-- 状态变更: 实体属性每发生一次变化记一条 state_change(余额/剩余次数/位置/等级/所有者/生死/连接状态…), old 尽量回填上一值; 每条都必须带原文 quote。
-- 事件完备: 覆盖全部情节节拍(交易/摆摊/租借/委托/战斗/邮件/接近/警告/回忆闪回…), 不只挑主线大事件; payload 按数字纪律填。
-- relations: 本章新建立或解除的关系(师徒/亲属/敌对/同门/主仆/朋友/所属/雇佣等), state 取 建立/解除。
-- story_time: 本章故事内时间; markers 收集「三日前/翌日/凌晨四点」等全部时间标记; day_offset 填相对故事开局的累计天数(可推断才填, 否则 null)。
-- quote 必须是章节原文的连续片段(不超过60字), 不得改写。
-- 禁止编造原文没有的实体与数值; 反过来, 原文出现的数值与实体不得遗漏。"""
+# 前情状态注入（跨章有状态抽取）：修 day_offset 断链与账本 old 回填断裂
+COLLECT_INSTRUCTIONS = """\
+通读下面的章节正文，用清单式笔记（不限格式、不输出 JSON）穷举本章事实，分类列出：
+1. 出场/被提及的每一个具名实体（人物/物品/材料/技能/地点/组织），含本章所有称呼；
+2. 每一个数值事实（余额/次数/等级/单价/数量/时长/距离/期限/排名/分值/规则参数），写明属于谁、上下文；
+3. 每一次状态变化（谁、什么属性、从什么变到什么），附原文短句；
+4. 每一个情节节拍（交易/战斗/委托/邮件/警告/接近/回忆闪回…），不只挑主线；
+5. 人物关系的建立/解除；
+6. 本章故事时间与全部时间标记。
+只记录原文依据，不编造；宁多勿漏。"""
+
+ORGANIZE_INSTRUCTIONS = """\
+把事实笔记完整整理为 JSON。规则：
+- 笔记中的每一条事实都必须进入 JSON，不得丢弃；也不得编造笔记之外的事实。
+- entities: type 取 人物/物品/地点/组织/功法（材料道具→物品，技能功法→功法）；aliases 收全部称呼，
+  代词与泛指(他/她/对方/这人)不得作为别名。
+- state_changes: 每次属性变化一条，attr 取 生死/境界/位置/所有者/所属/状态/余额/剩余次数/等级 等，
+  old 尽量回填（可参考前情状态），quote 用原文连续片段(≤60字)。
+- events: kind 用一个动词；payload 收一次性数值(单价/数量/总价/利润/时长/次数/酬金)，值保留原文写法。
+- 数字归位(最易失分): 笔记中的每一个数值都必须出现在 JSON 的某个结构化字段里——
+  持续属性进 entity.attrs，一次性事实进 event.payload，变化前后进 state_change.old/new；
+  数值只出现在 quote 或 summary 里视为遗漏。
+- relations: subject/object/kind(师徒/亲属/敌对/同门/主仆/朋友/所属/雇佣等)/state(建立/解除)。
+- story_time.day_offset: 在前情状态给出的累计天数基础上，按本章时间标记累计；无法推断才填 null。
+- 禁止编造；原文出现的数值与实体不得遗漏。"""
 
 
 @lru_cache(maxsize=1)
@@ -35,16 +53,31 @@ def _schema_json() -> str:
     return json.dumps(ChapterExtraction.model_json_schema(), ensure_ascii=False)
 
 
-def build_user_prompt(chapter: Chapter) -> str:
-    header = f"【第{chapter.number}章 {chapter.title}】" if chapter.title else f"【第{chapter.number}章】"
-    return (
-        f"{INSTRUCTIONS}\n\n# 输出 JSON Schema\n```json\n{_schema_json()}\n```\n\n"
-        f"# 章节正文\n{header}\n{chapter.text}"
-    )
+def _chapter_header(chapter: Chapter) -> str:
+    return f"【第{chapter.number}章 {chapter.title}】" if chapter.title else f"【第{chapter.number}章】"
 
 
-def build_messages(chapter: Chapter) -> list[dict[str, str]]:
+def build_collect_messages(chapter: Chapter, context_note: str = "") -> list[dict[str, str]]:
+    parts = [COLLECT_INSTRUCTIONS]
+    if context_note:
+        parts.append(f"\n# 前情状态（截至上一章末）\n{context_note}")
+    parts.append(f"\n# 章节正文\n{_chapter_header(chapter)}\n{chapter.text}")
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": build_user_prompt(chapter)},
+        {"role": "user", "content": "\n".join(parts)},
+    ]
+
+
+def build_organize_messages(
+    chapter: Chapter, notes: str, context_note: str = ""
+) -> list[dict[str, str]]:
+    parts = [ORGANIZE_INSTRUCTIONS]
+    if context_note:
+        parts.append(f"\n# 前情状态（截至上一章末）\n{context_note}")
+    parts.append(f"\n# 事实笔记（必须全部整理进 JSON）\n{notes}")
+    parts.append(f"\n# 输出 JSON Schema\n```json\n{_schema_json()}\n```")
+    parts.append(f"\n# 章节正文（核对用）\n{_chapter_header(chapter)}\n{chapter.text}")
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "\n".join(parts)},
     ]

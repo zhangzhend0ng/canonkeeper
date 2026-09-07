@@ -1,28 +1,41 @@
-"""抽取管线：章节文本 → provider(FAST 档) → 验证后的 ChapterExtraction。
+"""抽取管线（G&O 两段式 + 可选自洽采样 + 跨章有状态注入）。
 
-可靠性策略（PLAN §8「抽取错误率=检测器上限」）：
-- 解析/验证失败时，把错误回喂给模型重试一次（错误反馈重试）；
-- 重试仍失败 → ExtractionError（附章号与原始返回片段），由调用方决定 fail fast
-  还是跳过（skip_errors，非关键路径降级不中断整书，error-handling #7）。
-所有错误消息只含正文片段，不含密钥。
+- 第一段「收集」：自由笔记，不受格式约束（查全优先，arXiv 2402.13364）；
+- 第二段「组织」：把笔记整理为 schema JSON，错误反馈重试一次；
+- samples>1 时多遍采样并集合并（置信度自洽，arXiv 2502.06233；采样温度自动抬高保证多样性）；
+- extract_book 顺序抽取时逐章累积 PreviousState 并注入下章 prompt（修 day_offset 断链
+  与账本 old 回填断裂——GraphRAG/MemGPT 一脉的「抽取时回灌状态」思路的最小实现）。
+
+异常策略：解析/验证失败回喂重试一次，仍失败抛 ExtractionError（附章号），
+调用方决定 fail fast 或 skip_errors 降级。错误消息不含密钥。
 """
 
 from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
 from pydantic import ValidationError
 
 from ..ingest.splitter import Chapter
 from ..providers.base import Provider, Tier
-from .prompt import build_messages
+from .merge import merge_extractions
+from .prompt import build_collect_messages, build_organize_messages
 from .schemas import ChapterExtraction
 
-__all__ = ["ExtractionError", "strip_code_fence", "parse_extraction", "extract_chapter", "extract_book"]
+__all__ = [
+    "ExtractionError",
+    "PreviousState",
+    "strip_code_fence",
+    "parse_extraction",
+    "extract_chapter",
+    "extract_book",
+    "merge_extractions",
+]
 
-_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$")
 
 
 class ExtractionError(RuntimeError):
@@ -36,8 +49,7 @@ def strip_code_fence(text: str) -> str:
 
 
 def parse_extraction(raw: str, chapter_number: int) -> ChapterExtraction:
-    """原始返回 → 验证后的 ChapterExtraction。解析与验证错误都翻译为 ExtractionError，
-    消息附章号与原文片段（≤200 字），便于人工排查。"""
+    """原始返回 → 验证后的 ChapterExtraction。解析与验证错误都翻译为 ExtractionError。"""
     text = strip_code_fence(raw)
     try:
         data = json.loads(text)
@@ -58,17 +70,73 @@ def parse_extraction(raw: str, chapter_number: int) -> ChapterExtraction:
     return extraction
 
 
+@dataclass
+class PreviousState:
+    """跨章状态快照：随 extract_book 顺序抽取逐章累积，注入下一章 prompt。"""
+
+    day_offset: int | None = None
+    entities: dict[str, dict[str, str]] = field(default_factory=dict)  # 名字 -> 当前 attrs
+    tail_events: list[str] = field(default_factory=list)  # 最近事件引文（≤3 条）
+
+    def note(self) -> str:
+        lines: list[str] = []
+        if self.day_offset is not None:
+            lines.append(f"- 故事时间已推进到约开局后第 {self.day_offset} 天；本章 day_offset 应在此基础上按本章时间标记累计。")
+        if self.entities:
+            lines.append("- 主要实体当前状态：")
+            for name, attrs in list(self.entities.items())[:20]:
+                text = ", ".join(f"{k}={v}" for k, v in attrs.items()) or "（无记录属性）"
+                lines.append(f"  · {name}：{text}")
+        if self.tail_events:
+            lines.append("- 最近情节：" + "；".join(self.tail_events))
+        return "\n".join(lines)
+
+    def observe(self, extraction: ChapterExtraction) -> None:
+        if extraction.story_time.day_offset is not None:
+            self.day_offset = extraction.story_time.day_offset
+        for mention in extraction.entities:
+            self.entities.setdefault(mention.name, {}).update(mention.attrs)
+        self.tail_events = [e.quote for e in extraction.events if e.quote][-3:]
+
+
 def extract_chapter(
     provider: Provider,
     chapter: Chapter,
     *,
     tier: Tier = Tier.FAST,
     temperature: float = 0.0,
+    samples: int = 1,
+    context: PreviousState | None = None,
+    sampling_temperature: float = 0.6,
 ) -> ChapterExtraction:
-    """单章抽取：一次调用 + 一次错误反馈重试。抽取默认温度 0（往返可复现，
-    稳定性是 M0 验收指标；需要多样性时显式传参）。"""
-    messages = build_messages(chapter)
-    raw = provider.chat(messages, tier=tier, json_mode=True, temperature=temperature)
+    """单章抽取：收集（自由笔记）→ 组织（JSON，错误反馈重试一次）。
+
+    samples=1 保持温度 0 可复现；samples>1 自动用 sampling_temperature 采样并合并
+    （并集投票，查全面向）。context 提供前情状态时注入两段 prompt。"""
+    if samples < 1:
+        raise ValueError("samples 至少为 1")
+    context_note = context.note() if context else ""
+    effective_temperature = temperature if samples == 1 else max(temperature, sampling_temperature)
+    extractions: list[ChapterExtraction] = []
+    for _ in range(samples):
+        notes = provider.chat(
+            build_collect_messages(chapter, context_note), tier=tier, temperature=effective_temperature
+        )
+        extractions.append(_organize(provider, chapter, notes, context_note, tier, temperature))
+    return merge_extractions(extractions)
+
+
+def _organize(
+    provider: Provider,
+    chapter: Chapter,
+    notes: str,
+    context_note: str,
+    tier: Tier,
+    temperature: float,
+) -> ChapterExtraction:
+    messages = build_organize_messages(chapter, notes, context_note)
+    # 万字章的实体/变更 JSON 可超默认输出上限（DeepSeek 默认 4096 会被截断成非法 JSON）
+    raw = provider.chat(messages, tier=tier, json_mode=True, temperature=temperature, max_tokens=8192)
     try:
         return parse_extraction(raw, chapter.number)
     except ExtractionError as first_error:
@@ -80,9 +148,7 @@ def extract_chapter(
                 "content": f"上面的输出不合规（{first_error}）。请重新只输出一个符合给定 JSON Schema 的对象，不要任何其他文本。",
             },
         ]
-        raw_retry = provider.chat(
-            retry_messages, tier=tier, json_mode=True, temperature=temperature
-        )
+        raw_retry = provider.chat(retry_messages, tier=tier, json_mode=True, temperature=temperature)
         try:
             return parse_extraction(raw_retry, chapter.number)
         except ExtractionError as retry_error:
@@ -97,16 +163,21 @@ def extract_book(
     *,
     tier: Tier = Tier.FAST,
     temperature: float = 0.0,
+    samples: int = 1,
+    carry_context: bool = True,
     skip_errors: bool = False,
     progress: Callable[[int, int, ChapterExtraction | None], None] | None = None,
 ) -> list[ChapterExtraction]:
-    """逐章抽取。skip_errors=True 时失败章记为占位（summary 标注抽取失败）并继续；
-    否则首个失败立即抛出。progress(now, total, extraction|None) 在每章完成后回调。"""
+    """顺序逐章抽取；carry_context=True 时前情状态跨章注入（按章序依赖，需按顺序调用）。
+    skip_errors=True 时失败章占位回填并继续；否则首个失败立即抛出。"""
     results: list[ChapterExtraction] = []
+    state = PreviousState() if carry_context else None
     for chapter in chapters:
         extraction: ChapterExtraction | None
         try:
-            extraction = extract_chapter(provider, chapter, tier=tier, temperature=temperature)
+            extraction = extract_chapter(
+                provider, chapter, tier=tier, temperature=temperature, samples=samples, context=state
+            )
         except ExtractionError:
             if not skip_errors:
                 raise
@@ -116,6 +187,8 @@ def extract_book(
                 summary=f"[抽取失败，占位回填] {chapter.title}",
             )
         results.append(extraction)
+        if state is not None:
+            state.observe(extraction)
         if progress is not None:
             progress(chapter.number, len(chapters), extraction)
     return results

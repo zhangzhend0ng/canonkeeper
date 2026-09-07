@@ -76,6 +76,7 @@ class Provider(Protocol):
         tier: Tier = Tier.FAST,
         json_mode: bool = False,
         temperature: float = 0.3,
+        max_tokens: int | None = None,
     ) -> str: ...
 
 
@@ -119,6 +120,7 @@ class OpenAICompatProvider:
         tier: Tier = Tier.FAST,
         json_mode: bool = False,
         temperature: float = 0.3,
+        max_tokens: int | None = None,
     ) -> str:
         client = self._ensure_client()
         model = self._config.model_for(tier)
@@ -127,6 +129,8 @@ class OpenAICompatProvider:
             "messages": [dict(m) for m in messages],
             "temperature": temperature,
         }
+        if max_tokens is not None:
+            base_kwargs["max_tokens"] = max_tokens
         try:
             if json_mode:
                 try:
@@ -171,9 +175,15 @@ class MockProvider:
         tier: Tier = Tier.FAST,
         json_mode: bool = False,
         temperature: float = 0.3,
+        max_tokens: int | None = None,
     ) -> str:
         self.calls.append(
-            {"messages": [dict(m) for m in messages], "tier": tier, "json_mode": json_mode}
+            {
+                "messages": [dict(m) for m in messages],
+                "tier": tier,
+                "json_mode": json_mode,
+                "max_tokens": max_tokens,
+            }
         )
         response = self._responses[min(self._cursor, len(self._responses) - 1)]
         self._cursor += 1

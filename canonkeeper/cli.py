@@ -50,6 +50,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         args.db,
         args.provider,
         limit=args.limit,
+        samples=args.samples,
         skip_errors=args.skip_errors,
         progress=_progress,
     )
@@ -119,7 +120,9 @@ def _cmd_stability(args: argparse.Namespace) -> int:
     for run_index in range(args.runs):
         print(f"== 稳定性抽取 第 {run_index + 1}/{args.runs} 遍 ==", file=sys.stderr)
         for chapter in chapters:
-            runs.setdefault(chapter.number, []).append(extract_chapter(provider, chapter))
+            runs.setdefault(chapter.number, []).append(
+                extract_chapter(provider, chapter, samples=args.samples)
+            )
 
     rows: list[tuple[Chapter, list[ChapterExtraction], float]] = []
     for chapter in chapters:
@@ -196,6 +199,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument("--db", default=None, help="状态库路径（默认 books/<书名>.db）")
     p_ingest.add_argument("--provider", default="deepseek", help=f"provider（{ '/'.join(known_providers()) } 或 mock）")
     p_ingest.add_argument("--limit", type=int, default=0, help="只处理前 N 章（0=全部）")
+    p_ingest.add_argument("--samples", type=int, default=1, help="每章自洽采样遍数（>1 并集合并，成本翻倍）")
     p_ingest.add_argument("--skip-errors", action="store_true", help="单章抽取失败时占位跳过而非中断")
     p_ingest.set_defaults(func=_cmd_ingest)
 
@@ -219,6 +223,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_stab.add_argument("book", help="书稿路径")
     p_stab.add_argument("--provider", default="deepseek")
     p_stab.add_argument("--runs", type=int, default=2, help="每章抽取遍数（默认 2）")
+    p_stab.add_argument("--samples", type=int, default=1, help="每遍自洽采样数")
     p_stab.add_argument("--limit", type=int, default=0, help="只测前 N 章")
     p_stab.add_argument("--out", default=None, help="输出路径")
     p_stab.set_defaults(func=_cmd_stability)
