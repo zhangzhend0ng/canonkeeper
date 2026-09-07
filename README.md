@@ -62,7 +62,7 @@ canonkeeper rules                                  # 列出内置规则
 | `TIME_006` | 故事时间单调（闪回须显式标记；依赖 day_offset，缺失自动跳过） | `time_regression` |
 | `META_018` | 别名归一（别名指向多实体 → info，人工裁决） | `alias_collision` |
 
-**加规则零代码**：写一个 YAML（`rule_id/name/severity/predicate/params`），`dsh check --rules your.yaml`。
+**加规则零代码**：写一个 YAML（`rule_id/name/severity/predicate/params`），`canonkeeper check --rules your.yaml`。
 境界阶梯等参数按书自定义，示例见 [examples/custom_rules.yaml](examples/custom_rules.yaml)。
 PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数字复述一致、代词指代…）
 需要更强的抽取契约支撑，按里程碑逐步补谓词。
@@ -90,14 +90,19 @@ PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数�
 
 ## 当前状态
 
-- **M0 完成**：provider 层（deepseek/glm/mock + 分级档位）、切章、抽取管线
-  （错误反馈重试 ×1、`--skip-errors` 降级）、SQLite 状态库、`stability` 验收工具。
-  对真实 API 的往返稳定性测量（M0 验收：单书 10 章）待有 key 后执行。
-- **M1 起步**：规则引擎 + 8 条内置规则 + 报告。计划 20 条中其余谓词逐步接入。
-  自定义规则示例：`dsh check books/demo.db --rules examples/custom_rules.yaml`。
+- **M0 完成（含真实 API 基线，2026-09-07）**：provider 层（deepseek/glm/mock + 分级档位）、
+  切章、抽取管线（错误反馈重试 ×1、`--skip-errors` 降级）、SQLite 状态库、`stability` 验收工具。
+  真实基线（deepseek-chat，用户自有书稿 3 章）：ingest→check→report 全链路通过，
+  13 实体 / 4 状态变更入库，别名归一（浮窗→豆包、新手村→艾尔村）正确；
+  往返稳定性（别名集 Jaccard，runs=2）全书均值 **0.651**（分章 0.889 / 0.778 / 0.286，
+  第 3 章偏不稳，事件/变更计数同步波动）。改进抓手：抽取降温、双遍抽取交叉 +
+  旗舰复核（PLAN §8）。glm 适配器未实测（环境无 ZHIPU_API_KEY）。
+- **M1 起步**：规则引擎 + 8 条内置规则 + 报告。真实书稿 3 章检出 0 冲突（新稿无既有矛盾，
+  亦无为凑数的误报）。计划 20 条中其余谓词逐步接入。
+  自定义规则示例：`canonkeeper check books/demo.db --rules examples/custom_rules.yaml`。
 - **M2 占位**：persona 契约与内置画像已定义（`readers/personas.py`），模拟实现待 M2。
-- **dsh 插件接入（MCP）**：server + bundle 完成，stdio 端到端测试覆盖；对真实 dsh
-  运行时的挂载验证待安装 dsh 环境后进行。
+- **dsh 插件接入（MCP）**：server + bundle 完成，stdio 端到端测试覆盖；真实 dsh 运行时
+  `plugin add` + `--dump-config` 层叠加验证通过（工具注册的启动级验证待 LLM 凭据）。
 - 重建策略：`rebuild()` 以全书抽取为事实源单事务全量重建；增量追章优化留后续里程碑。
 
 ## 工程约定
