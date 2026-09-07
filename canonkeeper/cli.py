@@ -51,10 +51,14 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         args.provider,
         limit=args.limit,
         samples=args.samples,
+        incremental=args.incremental,
         skip_errors=args.skip_errors,
         progress=_progress,
     )
-    print(f"入库完成: {args.db}（{stats.chapters} 章 / 实体 {stats.entities}）")
+    print(
+        f"入库完成: {args.db}（{stats.chapters} 章 / 实体 {stats.entities}"
+        f" / 本次抽取 {stats.extracted} / 复用 {stats.reused}）"
+    )
     return 0
 
 
@@ -200,6 +204,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument("--provider", default="deepseek", help=f"provider（{ '/'.join(known_providers()) } 或 mock）")
     p_ingest.add_argument("--limit", type=int, default=0, help="只处理前 N 章（0=全部）")
     p_ingest.add_argument("--samples", type=int, default=1, help="每章自洽采样遍数（>1 并集合并，成本翻倍）")
+    p_ingest.add_argument("--incremental", action="store_true", help="增量追章：只抽取库中缺失的章（按章号对齐）")
     p_ingest.add_argument("--skip-errors", action="store_true", help="单章抽取失败时占位跳过而非中断")
     p_ingest.set_defaults(func=_cmd_ingest)
 

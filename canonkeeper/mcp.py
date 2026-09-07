@@ -53,7 +53,13 @@ def ingest_book(
         book_path, db_path, provider, limit=limit, skip_errors=skip_errors
     )
     return _json(
-        {"chapters": stats.chapters, "entities": stats.entities, "db": stats.db}
+        {
+            "chapters": stats.chapters,
+            "entities": stats.entities,
+            "db": stats.db,
+            "extracted": stats.extracted,
+            "reused": stats.reused,
+        }
     )
 
 

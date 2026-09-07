@@ -1,0 +1,29 @@
+# 合成 fixture 基准：CI 回归门禁用（无版权风险，随仓库分发）。
+# 章节短、事实确定，用于在 prompt/模型变更时快速发现查全回退；
+# 真实书稿基准（bench-v1）仍在本地手动运行。
+- book: fixture
+  chapter: 1
+  text: fixture-ch1.txt
+  facts:
+    - {id: n01, kind: number, value: "10 金币", alt: ["10金币"], note: 初始金币}
+    - {id: e01, kind: entity, name: 陈默, type: 人物}
+    - {id: e02, kind: entity, name: 青云宗, type: 组织}
+    - {id: v01, kind: event, kind_name: 报到, must: false, note: 入宗}
+- book: fixture
+  chapter: 2
+  text: fixture-ch2.txt
+  facts:
+    - {id: n02, kind: number, value: "6 金币", alt: ["6金币"], note: 买剑花费}
+    - {id: n03, kind: number, value: "4 金币", alt: ["4金币"], note: 剩余}
+    - {id: e03, kind: entity, name: 听雨, aliases: [听雨剑], type: 物品}
+    - {id: c01, kind: change, entity: 陈默, attr: 金币, new: 4}
+    - {id: v02, kind: event, kind_name: 购买, must: false, note: 买剑}
+- book: fixture
+  chapter: 3
+  text: fixture-ch3.txt
+  facts:
+    - {id: n04, kind: number, value: "20 金币", alt: ["20金币"], note: 赏金}
+    - {id: n05, kind: number, value: "24 金币", alt: ["24金币"], note: 总金币}
+    - {id: e04, kind: entity, name: 妖狼, type: 人物, must: false}
+    - {id: c02, kind: change, entity: 陈默, attr: 金币, new: 24}
+    - {id: f01, kind: signal, keywords: [听雨], note: 道具回收（ch2 埋设 ch3 使用）}

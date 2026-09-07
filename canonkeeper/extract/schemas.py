@@ -18,6 +18,7 @@ __all__ = [
     "Event",
     "Relation",
     "StateChange",
+    "Commitment",
     "StoryTime",
     "ChapterExtraction",
 ]
@@ -93,12 +94,23 @@ class Event(_StrictBase):
 
 
 class Relation(_StrictBase):
-    """人物/组织关系建立或解除。"""
+    """人物/组织关系建立或解除。stage 可选：关系数值/阶段（好感度类，galgame 式）。"""
 
     subject: str = Field(min_length=1)
     object: str = Field(min_length=1)
     kind: str = Field(min_length=1)  # 师徒/亲属/敌对/同门/主仆/朋友/所属…
     state: str = "建立"  # 建立/解除
+    stage: str = ""  # 关系阶段/数值（如 敌对-20、结盟；缺省空）
+
+
+class Commitment(_StrictBase):
+    """本章立下的承诺/伏笔/悬念（旗标语义：set 于本章，回收待后续章 check）。
+    供挖坑清单与 def-use 追踪（伏笔=定义，回收=使用）。"""
+
+    description: str = Field(min_length=1)
+    entities: list[str] = Field(default_factory=list)
+    kind: str = "伏笔"  # 伏笔/承诺/悬念/约定
+    quote: str = ""
 
 
 class StoryTime(_StrictBase):
@@ -120,4 +132,5 @@ class ChapterExtraction(_StrictBase):
     state_changes: list[StateChange] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
+    commitments: list[Commitment] = Field(default_factory=list)
     story_time: StoryTime = Field(default_factory=StoryTime)

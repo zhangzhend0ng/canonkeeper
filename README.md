@@ -39,9 +39,10 @@ deepseek-harness 的 CLI 也叫 `dsh`，同环境安装会撞名。
 ## 用法
 
 ```bash
-canonkeeper ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--skip-errors]
+canonkeeper ingest book.txt --db books/demo.db --provider deepseek [--limit 10] [--samples 3] [--skip-errors]
+canonkeeper ingest book.txt --db books/demo.db --incremental  # 增量追章：只抽库中缺失的章
 canonkeeper check   books/demo.db                  # 规则引擎，冲突写回状态库
-canonkeeper report  books/demo.db                  # markdown 冲突报告 → reports/
+canonkeeper report  books/demo.db                  # markdown 冲突报告 + 挖坑清单 → reports/
 canonkeeper replay  books/demo.db 3                # 回放第3章抽取 JSON（往返核对）
 canonkeeper stability book.txt --provider deepseek --runs 2  # M0 验收：抽取往返稳定性
 canonkeeper rules                                  # 列出内置规则
@@ -59,13 +60,16 @@ canonkeeper rules                                  # 列出内置规则
 | `CHAR_002` | 年龄等数值属性随时间线单调（重生/回溯须登记；支持中文数字） | `numeric_attr_monotonic` |
 | `CHAR_005` | 位置连续性（瞬移须登记；依赖事件 location，缺失自动跳过） | `location_continuity` |
 | `ITEM_011` | 交易/赠予后所有权转移须登记（前后 window 章内查登记） | `transfer_registered` |
+| `MONEY_015` | 账本连续性（余额类属性跨章变化链断裂须可解释；借鉴游戏经济 QA） | `balance_continuity` |
+| `MONEY_015F` | 收支复算（两次余额登记间收支代数和 ≈ 余额差；模糊值自动跳过，实验性） | `ledger_flow_recompute` |
 | `TIME_006` | 故事时间单调（闪回须显式标记；依赖 day_offset，缺失自动跳过） | `time_regression` |
 | `META_018` | 别名归一（别名指向多实体 → info，人工裁决） | `alias_collision` |
 
 **加规则零代码**：写一个 YAML（`rule_id/name/severity/predicate/params`），`canonkeeper check --rules your.yaml`。
-境界阶梯等参数按书自定义，示例见 [examples/custom_rules.yaml](examples/custom_rules.yaml)。
-PLAN §4 二十条中余下 12 条（称谓一致性、金钱流水守恒、数字复述一致、代词指代…）
-需要更强的抽取契约支撑，按里程碑逐步补谓词。
+余额属性表/阶梯等参数按书自定义，示例见 [examples/custom_rules.yaml](examples/custom_rules.yaml)。
+PLAN §4 二十条中余下 10 条（称谓一致性、数字复述一致、代词指代…）需要更强的抽取契约
+支撑，按里程碑逐步补谓词。抽取契约已含 `commitments`（本章立下的承诺/伏笔/悬念），
+报告输出**挖坑清单**——「伏笔=定义、回收=使用」的 def-use 追踪在 M2 补全。
 
 ## 作为 dsh（deepseek-harness）插件接入（MCP）
 
@@ -97,8 +101,12 @@ quote 原文回显不算捕获——与人工对账同口径。版权边界：�
 
 ```bash
 .venv/Scripts/python evals/run_eval.py --labels evals/labels/bench-v1.yaml \
-    --texts <本地章节目录> --provider deepseek --out evals/results/latest.md
+    --texts <本地章节目录> --provider deepseek --samples 3 --out evals/results/latest.md
 ```
+
+CI 门禁：`ci.yml` 在 push/PR 跑 pytest+mypy；`eval.yml` 手动触发跑**合成 fixture 基准**
+（`evals/fixtures/` 无版权风险随仓库分发，prompt/模型变更时的快速回归信号；
+真实书稿基准仍在本地手动跑）。
 
 当前基线 → 前沿技术迭代（bench-v1：艾尔德兰 3 章 + 热门财务流第 1 章万字体量，deepseek-chat）：
 
@@ -147,13 +155,16 @@ M2 persona 与 M3 生成回路的领域弹药库，每条技法按「机理 → 
   - **评测基线（evals，2026-09-08）**：自建事实级基准实测 overall——number 75%、entity 84%、
     attr 38%、change 40%、event 62%、relation 0%、time 33%。自家书数字 87% vs 未见热门文 45%，
     过拟合风险实锤。详见上方「评测基准」。
-- **M1 起步**：规则引擎 + 8 条内置规则 + 报告。计划 20 条中其余谓词逐步接入；
-  金钱流水守恒（⑮）与数字复述一致（⑳）因账本数据已可抽取，列入下一批。
+- **M1 起步**：规则引擎 + 10 条内置规则（⑮ 账本连续性与收支复算已落地——游戏经济 QA 移植）
+  + 报告（含挖坑清单）。抽取契约已含 commitments（旗标语义）。计划 20 条中其余谓词逐步接入；
+  def-use 回收配对在 M2 补全。
   自定义规则示例：`canonkeeper check books/demo.db --rules examples/custom_rules.yaml`。
 - **M2 占位**：persona 契约与内置画像已定义（`readers/personas.py`），模拟实现待 M2。
 - **dsh 插件接入（MCP）**：server + bundle 完成，stdio 端到端测试覆盖；真实 dsh 运行时
   `plugin add` + `--dump-config` 层叠加验证通过（工具注册的启动级验证待 LLM 凭据）。
-- 重建策略：`rebuild()` 以全书抽取为事实源单事务全量重建；增量追章优化留后续里程碑。
+- **增量追章（事件溯源化）**：`--incremental` 只抽库中缺失的章、投影随全书重建（按章号对齐）。
+- **CI**：push/PR 跑 pytest+mypy；eval workflow 手动触发 fixture 基准。
+- 重建策略：`rebuild()` 以全书抽取为事实源单事务重建（增量模式下事件日志=抽取原文，投影可重放）。
 
 ## 工程约定
 

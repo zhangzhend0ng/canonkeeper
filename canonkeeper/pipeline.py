@@ -21,6 +21,8 @@ class IngestStats:
     chapters: int
     entities: int
     db: str
+    extracted: int = 0  # 本次实际抽取的章数（增量模式 < chapters）
+    reused: int = 0     # 复用库中已有抽取的章数
 
 
 def _provider_models(provider: Provider) -> dict[str, str]:
@@ -37,19 +39,35 @@ def ingest_book_to_db(
     *,
     limit: int = 0,
     samples: int = 1,
+    incremental: bool = False,
     skip_errors: bool = False,
     progress: Callable[[int, int, ChapterExtraction | None], None] | None = None,
 ) -> IngestStats:
-    """切章 → 逐章抽取 → 入库（含元信息标注）。samples>1 时自洽采样并集合并。返回统计。"""
+    """切章 → 逐章抽取 → 入库（含元信息标注）。
+
+    incremental=True（事件溯源化增量追章）：已有抽取（chapter_extractions.raw）即事件日志，
+    只抽取库中缺失的章，投影随全书一次性重建——追章成本只花在新章上。
+    按章号对齐，适用于同一书稿文件追加新章后的再入库。
+    """
     provider = get_provider(provider_name)
     chapters = split_chapters(load_book_text(book))
     if not chapters:
         raise ValueError(f"未切出任何章节（书稿为空或路径不对）: {book}")
     if limit > 0:
         chapters = chapters[:limit]
-    extractions = extract_book(
-        provider, chapters, samples=samples, skip_errors=skip_errors, progress=progress
+
+    existing: dict[int, ChapterExtraction] = {}
+    if incremental and Path(db).exists():
+        with StateDB(db) as state:
+            existing = {e.chapter: e for e in state.extractions()}
+
+    todo = [c for c in chapters if c.number not in existing]
+    fresh = extract_book(
+        provider, todo, samples=samples, skip_errors=skip_errors, progress=progress
     )
+    by_chapter = {e.chapter: e for e in fresh}
+    extractions = [existing.get(c.number) or by_chapter[c.number] for c in chapters]
+
     with StateDB(db) as state:
         resolver = state.rebuild(extractions)
         models = _provider_models(provider)
@@ -59,7 +77,11 @@ def ingest_book_to_db(
         state.set_meta("model_flagship", models.get("flagship", "?"))
         state.set_meta("ingested_at", datetime.now().astimezone().isoformat(timespec="seconds"))
         return IngestStats(
-            chapters=len(extractions), entities=len(resolver.entities), db=str(db)
+            chapters=len(extractions),
+            entities=len(resolver.entities),
+            db=str(db),
+            extracted=len(fresh),
+            reused=len(extractions) - len(fresh),
         )
 
 

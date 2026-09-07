@@ -307,3 +307,88 @@ def test_trade_with_nearby_ownership_change_is_clean() -> None:
 def test_trade_without_item_entity_is_skipped() -> None:
     view = _trade_view(item_type="人物")
     assert PREDICATES["transfer_registered"](view, TRANSFER_PARAMS) == []
+
+
+# -- 账本连续性与收支复算（规则⑮，游戏经济 QA 移植） ------------------------------
+
+BALANCE_PARAMS: dict[str, object] = {"money_attrs": ["金币", "余额"]}
+
+
+def test_balance_break_is_flagged() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "交易", "金币", "", "21金币", ""),
+            ChangeRec(2, 1, "交易", "金币", "16金币", "31.6金币", ""),
+        ],
+    )
+    violations = PREDICATES["balance_continuity"](view, BALANCE_PARAMS)
+    assert [v.chapter for v in violations] == [2]
+    assert "账本断裂" in violations[0].message
+    assert "不可解释" in violations[0].message
+
+
+def test_continuous_balance_is_clean() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "交易", "金币", "", "21金币", ""),
+            ChangeRec(2, 1, "交易", "金币", "21金币", "31.6金币", ""),
+        ],
+    )
+    assert PREDICATES["balance_continuity"](view, BALANCE_PARAMS) == []
+
+
+def test_fuzzy_amounts_are_skipped() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "交易", "金币", "", "二十多枚", ""),
+            ChangeRec(5, 1, "交易", "金币", "七十多万", "一百来枚", ""),
+        ],
+    )
+    assert PREDICATES["balance_continuity"](view, BALANCE_PARAMS) == []
+
+
+def test_non_money_attrs_are_ignored() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "升级", "境界", "", "金丹", ""),
+            ChangeRec(2, 1, "受伤", "境界", "筑基", "炼气", ""),
+        ],
+    )
+    assert PREDICATES["balance_continuity"](view, BALANCE_PARAMS) == []
+
+
+FLOW_PARAMS: dict[str, object] = {
+    "money_attrs": ["金币"],
+    "income_keys": ["收入"],
+    "expense_keys": ["费用"],
+}
+
+
+def test_ledger_flow_mismatch_is_flagged() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "交易", "金币", "", "10金币", ""),
+            ChangeRec(3, 1, "交易", "金币", "10金币", "24金币", ""),
+        ],
+        events=[EventRec(2, "交易", (1,), quote="", payload={"收入": "20金币"})],
+    )
+    violations = PREDICATES["ledger_flow_recompute"](view, FLOW_PARAMS)
+    assert len(violations) == 1  # +20 ≠ +14
+    assert "收支复算不符" in violations[0].message
+
+
+def test_ledger_flow_consistent_is_clean() -> None:
+    view = make_view(
+        entities=["林昼"],
+        changes=[
+            ChangeRec(1, 1, "交易", "金币", "", "10金币", ""),
+            ChangeRec(3, 1, "交易", "金币", "10金币", "30金币", ""),
+        ],
+        events=[EventRec(2, "交易", (1,), quote="", payload={"收入": "20金币"})],
+    )
+    assert PREDICATES["ledger_flow_recompute"](view, FLOW_PARAMS) == []

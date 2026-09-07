@@ -58,7 +58,16 @@ CREATE TABLE IF NOT EXISTS relations(
     object_id INTEGER NOT NULL,
     kind TEXT NOT NULL,
     state TEXT NOT NULL DEFAULT '建立',
+    stage TEXT NOT NULL DEFAULT '',
     since_chapter INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS commitments(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chapter INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    entities TEXT NOT NULL DEFAULT '[]',
+    kind TEXT NOT NULL DEFAULT '伏笔',
+    quote TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS timeline(
     chapter INTEGER PRIMARY KEY,
@@ -114,6 +123,7 @@ class EventRec:
     entity_ids: tuple[int, ...]
     quote: str
     location: str = ""
+    payload: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -136,7 +146,14 @@ class StateDB:
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """旧状态库迁移（游戏存档迁移纪律）：relations 补 stage 列。"""
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(relations)")}
+        if "stage" not in columns:
+            self.conn.execute("ALTER TABLE relations ADD COLUMN stage TEXT NOT NULL DEFAULT ''")
 
     # -- 生命周期 -----------------------------------------------------------
 
@@ -172,7 +189,7 @@ class StateDB:
         conn = self.conn
         with conn:
             for table in ("entities", "state_changes", "events", "relations", "timeline",
-                          "chapter_extractions"):
+                          "chapter_extractions", "commitments"):
                 conn.execute(f"DELETE FROM {table}")
             # 第一遍：补齐变更/事件/关系引用的实体（含「未知」兜底），保证实体表完整
             for extraction in extractions:
@@ -222,10 +239,18 @@ class StateDB:
                     subject = resolver.ensure(relation.subject, chapter)
                     obj = resolver.ensure(relation.object, chapter)
                     conn.execute(
-                        "INSERT INTO relations(subject_id, object_id, kind, state, since_chapter) "
-                        "VALUES(?, ?, ?, ?, ?)",
+                        "INSERT INTO relations(subject_id, object_id, kind, state, stage, since_chapter) "
+                        "VALUES(?, ?, ?, ?, ?, ?)",
                         (subject.entity_id, obj.entity_id, relation.kind,
-                         relation.state, chapter),
+                         relation.state, relation.stage, chapter),
+                    )
+                for commitment in extraction.commitments:
+                    conn.execute(
+                        "INSERT INTO commitments(chapter, description, entities, kind, quote) "
+                        "VALUES(?, ?, ?, ?, ?)",
+                        (chapter, commitment.description,
+                         json.dumps(commitment.entities, ensure_ascii=False),
+                         commitment.kind, commitment.quote),
                     )
                 st = extraction.story_time
                 conn.execute(
@@ -302,6 +327,11 @@ class StateDB:
         ).fetchone()
         return ChapterExtraction.model_validate_json(row["raw"]) if row else None
 
+    def commitments(self) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM commitments ORDER BY chapter, id"
+        ).fetchall()
+
     def violations(self) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT * FROM violations ORDER BY "
@@ -336,7 +366,7 @@ def build_book_view(db: StateDB) -> BookView:
         EventRec(
             chapter=row["chapter"], kind=row["kind"],
             entity_ids=tuple(json.loads(row["entity_ids"])), quote=row["quote"],
-            location=row["location"],
+            location=row["location"], payload=json.loads(row["payload"]),
         )
         for row in db.events()
     ]

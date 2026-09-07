@@ -67,3 +67,58 @@ def test_violations_replace_semantics(db_path) -> None:
         db.replace_violations([Violation(rule_id="B", message="二")])
         rows = db.violations()
         assert len(rows) == 1 and rows[0]["rule_id"] == "B"
+
+
+def test_commitments_roundtrip(db_path) -> None:
+    from helpers import commitment
+
+    exts = [
+        extraction(1, commitments=[commitment("匿名邮件是谁发的", kind="悬念", entities=["林昼"])]),
+        extraction(2),
+    ]
+    with StateDB(db_path) as db:
+        db.rebuild(exts)
+        rows = db.commitments()
+        assert len(rows) == 1
+        assert rows[0]["chapter"] == 1
+        assert rows[0]["kind"] == "悬念"
+        assert "林昼" in rows[0]["entities"]
+        assert db.extractions() == exts  # 往返含 commitments
+
+
+def test_relations_stage_roundtrip(db_path) -> None:
+    from helpers import relation
+
+    exts = [extraction(1, relations=[relation("林昼", "青云宗", kind="所属", stage="外门弟子")])]
+    with StateDB(db_path) as db:
+        db.rebuild(exts)
+        rows = db.relations()
+        assert rows[0]["stage"] == "外门弟子"
+
+
+def test_relations_stage_migration_for_legacy_db(db_path) -> None:
+    """旧 schema 库打开时自动补 stage 列（存档迁移纪律）。"""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        "CREATE TABLE relations(id INTEGER PRIMARY KEY, subject_id INTEGER, object_id INTEGER,"
+        " kind TEXT, state TEXT, since_chapter INTEGER);"
+    )
+    conn.commit()
+    conn.close()
+    with StateDB(db_path) as db:
+        columns = {row["name"] for row in db.conn.execute("PRAGMA table_info(relations)")}
+        assert "stage" in columns
+
+
+def test_report_lists_commitments(db_path) -> None:
+    from canonkeeper.report.render import render_report
+    from canonkeeper.rules.engine import load_builtin_rules
+    from helpers import commitment
+
+    with StateDB(db_path) as db:
+        db.rebuild([extraction(1, commitments=[commitment("神秘邮件的寄件人", kind="悬念")])])
+        markdown = render_report(db, load_builtin_rules())
+    assert "挖坑清单" in markdown
+    assert "神秘邮件的寄件人" in markdown

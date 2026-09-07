@@ -22,6 +22,8 @@ __all__ = [
     "numeric_attr_monotonic",
     "location_continuity",
     "transfer_registered",
+    "balance_continuity",
+    "ledger_flow_recompute",
     "alias_collision",
     "time_regression",
 ]
@@ -150,11 +152,14 @@ _DIGITS_RE = re.compile(r"\d+")
 
 def _parse_cn_number(text: str) -> int | None:
     """从文本解析数值：阿拉伯数字优先，否则尝试常见中文数字写法（十六/三十五/一百零三…）。
+    模糊量词（多/余/左右/上下/几）返回 None——「七十多万」不是 70，宁漏不误。
     解析失败返回 None，调用方跳过不比较（宁可漏报不误报）。"""
     text = text.strip()
     match = _DIGITS_RE.search(text)
     if match:
         return int(match.group())
+    if re.search(r"[多余几上下]", text):
+        return None
     total = 0
     current = 0
     found = False
@@ -171,6 +176,97 @@ def _parse_cn_number(text: str) -> int | None:
     if not found:
         return None
     return total + current
+
+
+def balance_continuity(view: BookView, params: Mapping[str, Any]) -> list[Violation]:
+    """账本连续性（规则⑮的可机检核心，游戏经济 QA 的移植）：同一实体的余额类属性
+    变化链中，后一条的 old 与前一条的 new 均可解析为数值且不等 → 账本断裂。
+    old 缺失或为模糊值（七十多万）时跳过——那是抽取缺口，不是账目矛盾。"""
+    money_attrs = {str(a) for a in params.get("money_attrs", ())}
+    violations: list[Violation] = []
+    for entity_id, changes in _changes_by_entity(view).items():
+        money_changes = [
+            c for c in changes if any(m in c.attr or c.attr in m for m in money_attrs)
+        ]
+        previous: ChangeRec | None = None
+        for current in money_changes:
+            if previous is not None:
+                prev_value = _parse_cn_number(previous.new)
+                old_value = _parse_cn_number(current.old)
+                if (
+                    prev_value is not None
+                    and old_value is not None
+                    and prev_value != old_value
+                ):
+                    name = view.entities[entity_id].name
+                    violations.append(
+                        Violation(
+                            rule_id="",
+                            severity="",
+                            chapter=current.chapter,
+                            entity_ids=[entity_id],
+                            evidence_quote=current.quote,
+                            message=(
+                                f"实体「{name}」{current.attr}账本断裂：第{previous.chapter}章末为"
+                                f"「{previous.new}」，第{current.chapter}章变化却自「{current.old}」起"
+                                f"（差 {prev_value - old_value} 不可解释）"
+                            ),
+                        )
+                    )
+            previous = current
+    return violations
+
+
+def ledger_flow_recompute(view: BookView, params: Mapping[str, Any]) -> list[Violation]:
+    """收支复算（规则⑮实验性扩展，财务流专用）：两次余额登记之间的收支事件金额代数和
+    应等于余额差。仅精确数值参与（模糊值自动跳过）；sign 由 payload 键名启发式判定。"""
+    money_attrs = {str(a) for a in params.get("money_attrs", ())}
+    income_keys = {str(k) for k in params.get("income_keys", ())}
+    expense_keys = {str(k) for k in params.get("expense_keys", ())}
+    violations: list[Violation] = []
+    for entity_id, changes in _changes_by_entity(view).items():
+        money_changes = [
+            c for c in changes if any(m in c.attr or c.attr in m for m in money_attrs)
+        ]
+        for previous, current in zip(money_changes, money_changes[1:]):
+            old_value = _parse_cn_number(previous.new if not previous.old else previous.old)
+            new_value = _parse_cn_number(current.new)
+            if old_value is None or new_value is None:
+                continue
+            delta = new_value - old_value
+            flow = 0
+            has_flow = False
+            for event in view.events:
+                if entity_id not in event.entity_ids:
+                    continue
+                if not (previous.chapter <= event.chapter <= current.chapter):
+                    continue
+                for key, raw in event.payload.items():
+                    value = _parse_cn_number(str(raw))
+                    if value is None:
+                        continue
+                    if any(k in key for k in expense_keys):
+                        flow -= value
+                        has_flow = True
+                    elif any(k in key for k in income_keys):
+                        flow += value
+                        has_flow = True
+            if has_flow and flow != delta:
+                name = view.entities[entity_id].name
+                violations.append(
+                    Violation(
+                        rule_id="",
+                        severity="",
+                        chapter=current.chapter,
+                        entity_ids=[entity_id],
+                        message=(
+                            f"实体「{name}」{current.attr}收支复算不符：第{previous.chapter}~"
+                            f"{current.chapter}章间事件合计 {flow:+d}，但余额变动 {delta:+d}"
+                            "（可能有未登记收支或抽取缺口，供人工核对）"
+                        ),
+                    )
+                )
+    return violations
 
 
 def numeric_attr_monotonic(view: BookView, params: Mapping[str, Any]) -> list[Violation]:
@@ -338,6 +434,8 @@ PREDICATES: dict[str, Predicate] = {
     "numeric_attr_monotonic": numeric_attr_monotonic,
     "location_continuity": location_continuity,
     "transfer_registered": transfer_registered,
+    "balance_continuity": balance_continuity,
+    "ledger_flow_recompute": ledger_flow_recompute,
     "alias_collision": alias_collision,
     "time_regression": time_regression,
 }

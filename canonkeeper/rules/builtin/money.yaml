@@ -1,0 +1,17 @@
+# 世界观经济类不变量（PLAN §4 ⑮ 的可机检子集；借鉴游戏经济 QA：faucet & sink 复算）
+# money_attrs 按书自定义（财务流建议把所有余额类属性都列进来）。
+- rule_id: MONEY_015
+  name: 账本连续性（余额类属性跨章变化链断裂须可解释）
+  severity: medium
+  predicate: balance_continuity
+  params:
+    money_attrs: [金币, 余额, 账户, 债务, 剩余次数, 调用次数]
+
+- rule_id: MONEY_015F
+  name: 收支复算（两次余额登记间的收支事件代数和 ≈ 余额差；实验性）
+  severity: low
+  predicate: ledger_flow_recompute
+  params:
+    money_attrs: [金币, 余额, 账户]
+    income_keys: [收入, 利润, 净赚, 酬金, 赏金, 到账, 收益, 卖出, 售价]
+    expense_keys: [费用, 成本, 花费, 花销, 支出, 买入, 均价, 房租, 学费]

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from datetime import datetime
 from typing import Sequence
@@ -73,4 +74,16 @@ def render_report(db: StateDB, rules: Sequence[Rule]) -> str:
         if row["evidence_quote"]:
             lines.append(f"  > 「{row['evidence_quote']}」")
     lines.append("")
+
+    commitments = db.commitments()
+    if commitments:
+        lines += ["## 挖坑清单（未回收承诺/伏笔/悬念）", ""]
+        lines.append("> 旗标语义：本章 set，回收章待标注；对照「伏笔回收公平性」指标（M2）。")
+        lines.append("")
+        for row in commitments:
+            chapter_part = f"第{row['chapter']}章" if row["chapter"] else "全书"
+            entities = "、".join(json.loads(row["entities"])) if row["entities"] else ""
+            entity_part = f"（{entities}）" if entities else ""
+            lines.append(f"- **{chapter_part}** [{row['kind']}] {row['description']}{entity_part}")
+        lines.append("")
     return "\n".join(lines)

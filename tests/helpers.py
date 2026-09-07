@@ -6,6 +6,7 @@ from typing import Mapping, Sequence
 
 from canonkeeper.extract.schemas import (
     ChapterExtraction,
+    Commitment,
     EntityMention,
     Event,
     Relation,
@@ -44,8 +45,12 @@ def event(kind: str, entities: Sequence[str] = (), quote: str = "") -> Event:
     return Event(kind=kind, entities=list(entities), quote=quote)
 
 
-def relation(subject: str, obj: str, kind: str = "师徒", state: str = "建立") -> Relation:
-    return Relation(subject=subject, object=obj, kind=kind, state=state)
+def relation(subject: str, obj: str, kind: str = "师徒", state: str = "建立", stage: str = "") -> Relation:
+    return Relation(subject=subject, object=obj, kind=kind, state=state, stage=stage)
+
+
+def commitment(description: str, kind: str = "伏笔", entities: Sequence[str] = (), quote: str = "") -> Commitment:
+    return Commitment(description=description, kind=kind, entities=list(entities), quote=quote)
 
 
 def extraction(
@@ -55,6 +60,7 @@ def extraction(
     changes: Sequence[StateChange] = (),
     events: Sequence[Event] = (),
     relations: Sequence[Relation] = (),
+    commitments: Sequence[Commitment] = (),
     story_time: StoryTime | None = None,
     title: str = "",
 ) -> ChapterExtraction:
@@ -65,6 +71,7 @@ def extraction(
         state_changes=list(changes),
         events=list(events),
         relations=list(relations),
+        commitments=list(commitments),
         story_time=story_time or StoryTime(),
     )
 

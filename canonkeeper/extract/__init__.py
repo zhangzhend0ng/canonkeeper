@@ -6,6 +6,7 @@ from .schemas import (
     Event,
     Relation,
     StateChange,
+    Commitment,
     StoryTime,
 )
 from .extractor import (
@@ -23,6 +24,7 @@ __all__ = [
     "Event",
     "Relation",
     "StateChange",
+    "Commitment",
     "StoryTime",
     "ExtractionError",
     "PreviousState",

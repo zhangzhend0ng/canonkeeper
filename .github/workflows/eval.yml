@@ -1,0 +1,33 @@
+name: eval
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: "自洽采样遍数"
+        default: "3"
+
+jobs:
+  fixture-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装
+        run: python -m pip install -e ".[dev]"
+      - name: 合成 fixture 基准（回归门禁；需仓库 Secret: DEEPSEEK_API_KEY）
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          python evals/run_eval.py \
+            --labels evals/labels/fixture.yaml \
+            --texts evals/fixtures \
+            --provider deepseek \
+            --samples "${{ inputs.samples }}" \
+            --out evals/results/ci-fixture.md
+      - name: 上传报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/results/ci-fixture.md

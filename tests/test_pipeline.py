@@ -46,3 +46,24 @@ def test_ingest_empty_book_raises_value_error(tmp_path: Path) -> None:
         assert "未切出任何章节" in str(exc)
     else:
         raise AssertionError("空书稿应抛 ValueError")
+
+
+def test_incremental_ingest_extracts_only_missing(tmp_path) -> None:
+    """事件溯源化增量追章：已有章复用库中抽取，只对缺失章花 API。"""
+    book = tmp_path / "b.txt"
+    book.write_text(
+        "第一章 一\n正文一。\n第二章 二\n正文二。\n第三章 三\n正文三。", encoding="utf-8"
+    )
+    db = tmp_path / "s.db"
+    stats_first = ingest_book_to_db(book, db, "mock", limit=2)
+    assert stats_first.extracted == 2 and stats_first.reused == 0
+
+    stats_second = ingest_book_to_db(book, db, "mock", incremental=True)
+    assert stats_second.chapters == 3
+    assert stats_second.extracted == 1  # 只抽第 3 章
+    assert stats_second.reused == 2  # 前两章复用事件日志
+
+    from canonkeeper.store.db import StateDB
+
+    with StateDB(db) as state:
+        assert [e.chapter for e in state.extractions()] == [1, 2, 3]
